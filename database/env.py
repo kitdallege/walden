@@ -10,11 +10,12 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)
+config.include_schemas = True
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from walden import models
-target_metadata = [models.Base.metadata, models.PublishedBase]
+from walden.models.core import Base, PublishedBase
+target_metadata = [Base.metadata, PublishedBase.metadata]
 #target_metadata = None
 
 # other values from the config, defined by the needs of env.py,
