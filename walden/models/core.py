@@ -26,21 +26,29 @@ from walden.models.base import (
 # need branch for Entities
 class Branch(TemporalMixin, HistoryMixin, Base):
     __tablename__ = 'branch'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement='auto')
     branch_id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 
 # Entities
+class Application(TemporalMixin, VersionedMixin, Base):
+    __tablename__ = 'application'
+    id = Column(Integer, primary_key=True, autoincrement='auto')
+    application_id = Column(Integer, nullable=False)
+    name = Column(String(length=255), unique=True, nullable=False)
+    description = Column(UnicodeText(), nullable=False)
 
 class Entity(TemporalMixin, VersionedMixin, Base):
     __tablename__ = 'entity'
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement='auto')
     entity_id = Column(Integer, nullable=False)
+    application_id = Column(Integer, ForeignKey(Application.id), nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
-    attributes = relationship('Atttribute', secondary='entity_attribute')
+    #attributes = relationship('Atttribute', secondary='entity_attribute')
+    
     # dealing with the physical model
     # logical_id = OneOrMore(self.attributes)
     # table = Column(String(length=255), unique=True, nullable=False)
@@ -52,37 +60,36 @@ class Entity(TemporalMixin, VersionedMixin, Base):
 
 class AttributeType(Base):
     __tablename__ = 'attribute_type'
-    id = Column(Integer, primary_key=True)
-    attribute_id = Column(Integer)
+    id = Column(Integer, primary_key=True, autoincrement='auto')
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText())
     #pg_type = Column(Integer, ForeignKey("pg_catalog.pg_type.oid")) # ? 
 
+# This abstraction whilst a PITA to work with allows for the concept of 
+# interfaces fairly easy also it promotes normalization to some degree.
 class Attribute(TemporalMixin, VersionedMixin, Base):
     __tablename__ = 'attribute'
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement='auto')
     attribute_id = Column(Integer)
+    entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
     name = Column(String(length=255), nullable=False)
     description = Column(UnicodeText())
-    type = Column(Integer, ForeignKey(AttributeType.id), nullable=False)
-
-
+    type_id = Column(Integer, ForeignKey(AttributeType.id), nullable=False)
+    # TODO: deal with the physical model
+    # type-args 
+    # required (NULL/NOT NULL)
+    # unique constraints (etc.)
 
 # Immutable M2M's
 # Need to store a valid time-span so that we know what items are valid for
 # what other items (when).. So asking what 'requires/implies' when with all
 # things temporal.
-class EntityAttribute(TemporalMixin, VersionedMixin, Base):
-    __tablename__ = 'entity_attribute'
-    id = Column(Integer, primary_key=True)
-    entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
-    attribute_id = Column(Integer, ForeignKey(Attribute.id), nullable=False)
-    ## dealing with the physical model
-    ## type
-    ## type-args 
-    ## required (NULL/NOT NULL)
-    ## unique constraints (etc.)    
-    ##Column('order', Integer) # hidden but used for column order
+#class EntityAttribute(TemporalMixin, VersionedMixin, Base):
+    #__tablename__ = 'entity_attribute'
+    #id = Column(Integer, primary_key=True, autoincrement='auto')
+    #entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
+    #attribute_id = Column(Integer, ForeignKey(Attribute.id), nullable=False)
+    #Column('order', Integer) # hidden but used for column order
 
 #class EntityConstraint(TemporalMixin, HistoryMixin, VersionedMixin):
     #pass
@@ -137,3 +144,7 @@ class EntityAttribute(TemporalMixin, VersionedMixin, Base):
 #op.execute("CREATE SCHEMA walden")
 #op.execute("CREATE SCHEMA walden_history")
 #op.execute("CREATE SCHEMA walden_published")
+#bind = op.get_bind()
+#session = Session(bind=bind)
+#>>> from sqlalchemy.dialects import postgresql
+#>>> print str(q.statement.compile(dialect=postgresql.dialect()))
