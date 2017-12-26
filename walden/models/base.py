@@ -31,12 +31,13 @@ class TemporalMixin(object):
 class HistoryMixin(object):
     # requires a way to denote object_id vs instance_id
     # should also store parent_instance_id or 0 if root.
-    parent_id = Column(Integer, nullable=False, server_default=text('0'))
+    parent_id = Column(Integer, nullable=False) #, server_default=text('0'))
+    # default makes it to easy to forget and then everything has parent = 0
 
 class VersionedMixin(HistoryMixin):
     @declared_attr
     def branch_id(cls):
-        return Column('branch_id', ForeignKey('branch.id'))
+        return Column('branch_id', ForeignKey('branch.id'), nullable=False)
     
     def branch(cls):
         return relationship('Branch')

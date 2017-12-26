@@ -27,7 +27,7 @@ from walden.models.base import (
 class Branch(TemporalMixin, HistoryMixin, Base):
     __tablename__ = 'branch'
     id = Column(Integer, primary_key=True, autoincrement='auto')
-    branch_id = Column(Integer, nullable=False)
+    #branch_id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
@@ -35,15 +35,15 @@ class Branch(TemporalMixin, HistoryMixin, Base):
 # Entities
 class Application(TemporalMixin, VersionedMixin, Base):
     __tablename__ = 'application'
-    id = Column(Integer, primary_key=True, autoincrement='auto')
-    application_id = Column(Integer, nullable=False)
+    inst_id = Column(Integer, primary_key=True, autoincrement='auto')
+    id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 class Entity(TemporalMixin, VersionedMixin, Base):
     __tablename__ = 'entity'
-    id = Column(Integer, primary_key=True, autoincrement='auto')
-    entity_id = Column(Integer, nullable=False)
+    inst_id = Column(Integer, primary_key=True, autoincrement='auto')
+    id = Column(Integer, nullable=False)
     application_id = Column(Integer, ForeignKey(Application.id), nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
@@ -56,13 +56,14 @@ class Entity(TemporalMixin, VersionedMixin, Base):
     # ordering
     # Would be nice to have 'sealed attributes' those which are not allowed 
     # to change.
-    # Abilities ? - these would be groups of columns w/sql functions etc.
+    # Abilities/Interfaces ? - these would be column aliases for 
+    #                          a given piece of functionality.
 
 class AttributeType(Base):
     __tablename__ = 'attribute_type'
     id = Column(Integer, primary_key=True, autoincrement='auto')
     name = Column(String(length=255), unique=True, nullable=False)
-    description = Column(UnicodeText())
+    description = Column(UnicodeText(), nullable=False)
     #pg_type = Column(Integer, ForeignKey("pg_catalog.pg_type.oid")) # ? 
 
 # This abstraction whilst a PITA to work with allows for the concept of 
@@ -70,12 +71,13 @@ class AttributeType(Base):
 class Attribute(TemporalMixin, VersionedMixin, Base):
     __tablename__ = 'attribute'
     id = Column(Integer, primary_key=True, autoincrement='auto')
-    attribute_id = Column(Integer)
-    entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
+    eid = Column(Integer, nullable=False)
+    #entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
     name = Column(String(length=255), nullable=False)
-    description = Column(UnicodeText())
+    description = Column(UnicodeText(), nullable=False)
     type_id = Column(Integer, ForeignKey(AttributeType.id), nullable=False)
     # TODO: deal with the physical model
+    # creation_template
     # type-args 
     # required (NULL/NOT NULL)
     # unique constraints (etc.)
@@ -84,11 +86,12 @@ class Attribute(TemporalMixin, VersionedMixin, Base):
 # Need to store a valid time-span so that we know what items are valid for
 # what other items (when).. So asking what 'requires/implies' when with all
 # things temporal.
-#class EntityAttribute(TemporalMixin, VersionedMixin, Base):
-    #__tablename__ = 'entity_attribute'
-    #id = Column(Integer, primary_key=True, autoincrement='auto')
-    #entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
-    #attribute_id = Column(Integer, ForeignKey(Attribute.id), nullable=False)
+class EntityAttribute(TemporalMixin, VersionedMixin, Base):
+    __tablename__ = 'entity_attribute'
+    id = Column(Integer, primary_key=True, autoincrement='auto')
+    eid = Column(Integer, nullable=False)
+    entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
+    attribute_id = Column(Integer, ForeignKey(Attribute.id), nullable=False)
     #Column('order', Integer) # hidden but used for column order
 
 #class EntityConstraint(TemporalMixin, HistoryMixin, VersionedMixin):

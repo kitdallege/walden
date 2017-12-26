@@ -9,6 +9,7 @@ from walden.models import core
 class Fixtures(object):
     def __init__(self, session):
         self.session = session
+        self.master = None
     
     def get_or_create(self, model, **kwargs):
         '''
@@ -26,13 +27,13 @@ class Fixtures(object):
     
     def run(self):
         # Create master branch
-        master = self.get_or_create(core.Branch, **dict(
+        self.master = self.get_or_create(core.Branch, **dict(
             branch_id=1, name="master",
             description=u"The mainline branch. Everything depends on this guy."
         ))
         # Create 'walden' application / entity namespace.
         walden_app = self.get_or_create(core.Application, **dict(
-            branch_id=master.id,
+            branch_id=self.master.id,
             application_id=1,
             name="walden",
             description=u"Contains all the 'builtins' from walden."
@@ -156,49 +157,64 @@ class Fixtures(object):
         # Add Entities & associate attributes with them.
         User = self.get_or_create(core.Entity, **dict(
             entity_id=1,
+            branch_id=self.master.id,
             application_id=self.application_type_id('walden').id,
             name="User",
             description=u"A user within the walden system."
         ))
         self.session.add(User)
         self.session.commit()
-        self.session.add_all([
+        attrs_for_user = [
             self.get_or_create(core.Attribute, **dict(
-                entity_id=User.id,
+                #entity_id=User.id,
                 attribute_id=1, # TODO: attribute_id should be query based max(attribute_id) + 1
+                branch_id=self.master.id,
                 name="username",
                 description=u"Username. alphanumeric string with no spaces.",
                 type_id=self.attribute_type_id('character varying').id,
             )),
             self.get_or_create(core.Attribute, **dict(
-                entity_id=User.id,
+                #entity_id=User.id,
                 attribute_id=2, # TODO: attribute_id should be query based max(attribute_id) + 1
+                branch_id=self.master.id,
                 name="first_name",
                 description=u"Persons first name.",
                 type_id=self.attribute_type_id('character varying').id,
             )),            
             self.get_or_create(core.Attribute, **dict(
-                entity_id=User.id,
+                #entity_id=User.id,
                 attribute_id=3, # TODO: attribute_id should be query based max(attribute_id) + 1
+                branch_id=self.master.id,
                 name="last_name",
                 description=u"Persons last name.",
                 type_id=self.attribute_type_id('character varying').id,
             )),
             self.get_or_create(core.Attribute, **dict(
-                entity_id=User.id,
+                #entity_id=User.id,
                 attribute_id=4, # TODO: attribute_id should be query based max(attribute_id) + 1
+                branch_id=self.master.id,
                 name="email",
                 description=u"Email address.",
                 type_id=self.attribute_type_id('character varying').id,
             )),
             self.get_or_create(core.Attribute, **dict(
-                entity_id=User.id,
+                #entity_id=User.id,
                 attribute_id=5, # TODO: attribute_id should be query based max(attribute_id) + 1
+                branch_id=self.master.id,
                 name="password",
                 description=u"Super spy password.",
                 type_id=self.attribute_type_id('character varying').id,
             )),
-        ])
+        ]
+        # create attrs.
+        self.session.add_all(attrs_for_user)
+        # tie atttrs to entity instance.
+        for attr in attrs_for_user:
+            self.get_or_create(core.EntityAttribute, **dict(
+                entity_id=User.id, attribute_id=attr.id,
+                branch_id=self.master.id,
+            ))
+        
 
 
 if __name__ == '__main__':
