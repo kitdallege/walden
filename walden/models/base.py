@@ -34,7 +34,7 @@ class HistoryMixin(object):
     parent_id = Column(Integer, nullable=False) #, server_default=text('0'))
     # default makes it to easy to forget and then everything has parent = 0
 
-class VersionedMixin(HistoryMixin):
+class VersionedMixin(object):
     @declared_attr
     def branch_id(cls):
         return Column('branch_id', ForeignKey('branch.id'), nullable=False)

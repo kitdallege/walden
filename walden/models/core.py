@@ -27,24 +27,23 @@ from walden.models.base import (
 class Branch(TemporalMixin, HistoryMixin, Base):
     __tablename__ = 'branch'
     id = Column(Integer, primary_key=True, autoincrement='auto')
-    #branch_id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 
 # Entities
-class Application(TemporalMixin, VersionedMixin, Base):
+class Application(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'application'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
-class Entity(TemporalMixin, VersionedMixin, Base):
+class Entity(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'entity'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
-    application_id = Column(Integer, ForeignKey(Application.id), nullable=False)
+    application_id = Column(Integer, nullable=False) # ForeignKey(Application.id)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
     #attributes = relationship('Atttribute', secondary='entity_attribute')
@@ -59,40 +58,57 @@ class Entity(TemporalMixin, VersionedMixin, Base):
     # Abilities/Interfaces ? - these would be column aliases for 
     #                          a given piece of functionality.
 
-class AttributeType(Base):
+class AttributeType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'attribute_type'
     id = Column(Integer, primary_key=True, autoincrement='auto')
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
-    #pg_type = Column(Integer, ForeignKey("pg_catalog.pg_type.oid")) # ? 
+
+class PgType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
+    __tablename__ = 'postgres_type'
+    id = Column(Integer, primary_key=True, autoincrement='auto')
+    name = Column(String(length=255), unique=True, nullable=False)
+    description = Column(UnicodeText(), nullable=False)
+    # creation_template + type-args ?
+    # constraints (etc.)
+
 
 # This abstraction whilst a PITA to work with allows for the concept of 
 # interfaces fairly easy also it promotes normalization to some degree.
-class Attribute(TemporalMixin, VersionedMixin, Base):
+class Attribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'attribute'
-    id = Column(Integer, primary_key=True, autoincrement='auto')
-    eid = Column(Integer, nullable=False)
-    #entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
+    inst_id = Column(Integer, primary_key=True, autoincrement='auto')
+    id = Column(Integer, nullable=False)
     name = Column(String(length=255), nullable=False)
     description = Column(UnicodeText(), nullable=False)
-    type_id = Column(Integer, ForeignKey(AttributeType.id), nullable=False)
-    # TODO: deal with the physical model
-    # creation_template
-    # type-args 
-    # required (NULL/NOT NULL)
-    # unique constraints (etc.)
+    attribute_type_id = Column(Integer, nullable=False) # ForeignKey(AttributeType.id)
+
 
 # Immutable M2M's
 # Need to store a valid time-span so that we know what items are valid for
 # what other items (when).. So asking what 'requires/implies' when with all
 # things temporal.
-class EntityAttribute(TemporalMixin, VersionedMixin, Base):
+class EntityAttribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'entity_attribute'
-    id = Column(Integer, primary_key=True, autoincrement='auto')
-    eid = Column(Integer, nullable=False)
-    entity_id = Column(Integer, ForeignKey(Entity.id), nullable=False)
-    attribute_id = Column(Integer, ForeignKey(Attribute.id), nullable=False)
-    #Column('order', Integer) # hidden but used for column order
+    inst_id = Column(Integer, primary_key=True, autoincrement='auto')
+    id = Column(Integer, nullable=False)
+    entity_id = Column(Integer, nullable=False) # ForeignKey(Entity.id)
+    attribute_id = Column(Integer, nullable=False) # ForeignKey(Attribute.id), 
+    pgtype_id = Column(Integer, ForeignKey(PgType.id), nullable=False)
+    # TODO: deal with the physical model
+    # creation_template_override
+    # type-args 
+    # required (NULL/NOT NULL)
+    # unique constraints (etc.)
+
+# TODO:
+# Concept of Interfaces
+# Computed Attributes 
+# Squishy entities. (jsonb instance_properties) on an entity would allow for
+#    an easy solution to where to stick 'extra/not-in-the-schema' data.
+#    Could be explicit or implicit. Explicit is easy stick a .extra field on.
+#    implicite would be any field not in entity.attributes gets saved to .extras
+#    and on read .extras is merged into the objects namespace...
 
 #class EntityConstraint(TemporalMixin, HistoryMixin, VersionedMixin):
     #pass
