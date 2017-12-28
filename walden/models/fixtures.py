@@ -97,6 +97,10 @@ class Fixtures(object):
                 name="Enum", description=u"",
                 branch_id=1, parent_id=0
             ),
+            core.AttributeType(
+                name="Computed", description=u"",
+                branch_id=1, parent_id=0
+            )
         ]
     
     @staticmethod
