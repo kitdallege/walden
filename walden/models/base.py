@@ -7,6 +7,9 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.dialects.postgresql import JSONB
 
+#_data : stores all data temporally (eg: denormalized fk's etc.)
+#_master : view into 'master' branch of _data (normalized fk's etc.)
+#_{branch.name} : development
 Base          = declarative_base(metadata=MetaData(schema='walden'))
 PublishedBase = declarative_base(metadata=MetaData(schema='walden_published'))
 HistoryBase   = declarative_base(metadata=MetaData(schema='walden_history'))
@@ -38,7 +41,6 @@ class VersionedMixin(object):
     @declared_attr
     def branch_id(cls):
         return Column('branch_id', ForeignKey('branch.id'), nullable=False)
-    
+
     def branch(cls):
         return relationship('Branch')
-
