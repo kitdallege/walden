@@ -11,7 +11,7 @@ import {
     UPDATE,
     DELETE,
     QUERY_TYPES,
-} from 'aor-graphql-client/lib/constants';
+} from 'react-admin';
 
 
 // TODO: UPDATE CACHED SCHEMA ALL THE TIME. It works with introspection
@@ -20,7 +20,7 @@ export const introspectionOptions = {
     schema,
     operationNames: {
        [GET_LIST]: resource => `all${pluralize(resource.name)}`,
-       [GET_ONE]: resource => `${resource.name.toLowerCase()}`,
+       [GET_ONE]: resource  => `${resource.name.toLowerCase()}`,
        [GET_MANY]: resource => `all${pluralize(resource.name)}`,
        [GET_MANY_REFERENCE]: resource => `all${pluralize(resource.name)}`,
        [CREATE]: resource => `create${resource.name}`,
@@ -90,12 +90,13 @@ const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) =
 }
 
 export const queryBuilder = introspectionResults => (aorFetchType, resourceName, params) => {
+    //debugger
     const resource = introspectionResults.resources.find(r => r.type.name === resourceName);
     switch (aorFetchType) {
         case 'GET_LIST':
         case 'GET_MANY':
         case 'GET_MANY_REFERENCE':
-            return {
+            const result =  {
                 query: gql`query ${resource[aorFetchType].name} {
                     data: ${resource[aorFetchType].name}(last: 20) {
                         items: nodes {
@@ -106,7 +107,9 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 }`,
                 variables: params, // params = { id: ... }
                 parseResponse: response => ({'data': response.data.data.items, 'total': response.data.data.totalCount})
-            }
+            };
+            console.info(result);
+            return result;
             break;
         case 'GET_ONE':
         case 'DELETE':
@@ -117,4 +120,10 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
         default:
             return undefined;
     }
+}
+
+
+export const buildQueryFactory = function (introspectionResults, otherOptions) {
+    //debugger
+    return queryBuilder(introspectionResults)
 }

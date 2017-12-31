@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, Datagrid, TextField } from 'admin-on-rest';
+import { List, Datagrid, TextField } from 'react-admin';
 
 export const EntityList = (props) => (
         <List {...props}>
