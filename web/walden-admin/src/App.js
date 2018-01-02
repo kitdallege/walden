@@ -1,29 +1,22 @@
 import React, { Component } from 'react';
-import buildGraphQLProvider from 'ra-data-graphql';
 import { Admin, Resource } from 'react-admin';
-// import darkBaseTheme from 'material-ui/styles/baseThemes/darkBaseTheme';
-// import getMuiTheme from 'material-ui/styles/getMuiTheme';
+import buildGraphQLProvider from 'ra-data-graphql';
 import { createMuiTheme } from 'material-ui/styles';
 // walden
-import { EntityList } from './entities';
+import { EntityList, EntityShow } from './entities';
 import { introspectionOptions, buildQueryFactory} from './client';
-import {
-    CREATE,
-    GET_LIST,
-    GET_ONE,
-    GET_MANY,
-    GET_MANY_REFERENCE,
-    UPDATE,
-    DELETE,
-    QUERY_TYPES,
-} from 'react-admin';
+// import {
+//     CREATE,
+//     GET_LIST,
+//     GET_ONE,
+//     GET_MANY,
+//     GET_MANY_REFERENCE,
+//     UPDATE,
+//     DELETE,
+//     QUERY_TYPES,
+// } from 'react-admin';
 
-
-const theme = createMuiTheme({
-  palette: {
-    type: 'dark', // Switching the dark mode on is a single property value change.
-  },
-});
+const theme = createMuiTheme({palette: {type: 'dark'}});
 
 class App extends Component {
     constructor() {
@@ -33,15 +26,8 @@ class App extends Component {
     componentDidMount() {
         buildGraphQLProvider({
             introspection: introspectionOptions,
-            client:{
-                uri:'http://0.0.0.0:5000/graphql'
-            },
-            buildQuery: buildQueryFactory,
-            // resolveIntrospection: function (client, options) {
-            //     debugger
-            //     console.info(options.operationNames[GET_ONE]("Entity"));
-            //     debugger
-            // }
+            client:{uri:'http://0.0.0.0:5000/graphql'},
+            buildQuery: buildQueryFactory
         }).then(dataProvider => this.setState({dataProvider}));
     }
     render() {
@@ -54,7 +40,7 @@ class App extends Component {
                 dataProvider={dataProvider}
                 title="Walden Admin"
                 theme={theme}>
-                <Resource name="Entity" list={EntityList} />
+                <Resource name="Entity" list={EntityList} show={EntityShow}/>
             </Admin>
         );
     }

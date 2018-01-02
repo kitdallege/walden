@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from walden.models.base import (
     Base,
     PublishedBase,
-    HistoryBase,
+    MasterBase,
     # column's
     RequiredIntegerColumn,
     PKColumn,
@@ -25,47 +25,48 @@ from walden.models.base import (
 # VCS
 # need branch for Entities
 class Branch(TemporalMixin, HistoryMixin, Base):
-    __tablename__ = 'branch'
-    id = Column(Integer, primary_key=True, autoincrement='auto')
+    __tablename__ = 'walden_branch'
+    inst_id = Column(Integer, primary_key=True, autoincrement='auto')
+    id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 
 # Entities
 class Application(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'application'
+    __tablename__ = 'walden_application'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 class Entity(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'entity'
+    __tablename__ = 'walden_entity'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
     application_id = Column(Integer, nullable=False) # ForeignKey(Application.id)
-    name = Column(String(length=255), unique=True, nullable=False)
+    name = Column(String(length=255), nullable=False) # unique=True (unique for id)
     description = Column(UnicodeText(), nullable=False)
     #attributes = relationship('Atttribute', secondary='entity_attribute')
-    
+
     # dealing with the physical model
     # logical_id = OneOrMore(self.attributes)
     # table = Column(String(length=255), unique=True, nullable=False)
-    # inherit 
+    # inherit
     # ordering
-    # Would be nice to have 'sealed attributes' those which are not allowed 
+    # Would be nice to have 'sealed attributes' those which are not allowed
     # to change.
-    # Abilities/Interfaces ? - these would be column aliases for 
+    # Abilities/Interfaces ? - these would be column aliases for
     #                          a given piece of functionality.
 
 class AttributeType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'attribute_type'
+    __tablename__ = 'walden_attribute_type'
     id = Column(Integer, primary_key=True, autoincrement='auto')
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
 
 class PgType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'postgres_type'
+    __tablename__ = 'walden_postgres_type'
     id = Column(Integer, primary_key=True, autoincrement='auto')
     name = Column(String(length=255), unique=True, nullable=False)
     description = Column(UnicodeText(), nullable=False)
@@ -73,10 +74,10 @@ class PgType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     # constraints (etc.)
 
 
-# This abstraction whilst a PITA to work with allows for the concept of 
+# This abstraction whilst a PITA to work with allows for the concept of
 # interfaces fairly easy also it promotes normalization to some degree.
 class Attribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'attribute'
+    __tablename__ = 'walden_attribute'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
     name = Column(String(length=255), nullable=False)
@@ -89,21 +90,21 @@ class Attribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
 # what other items (when).. So asking what 'requires/implies' when with all
 # things temporal.
 class EntityAttribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
-    __tablename__ = 'entity_attribute'
+    __tablename__ = 'walden_entity_attribute'
     inst_id = Column(Integer, primary_key=True, autoincrement='auto')
     id = Column(Integer, nullable=False)
     entity_id = Column(Integer, nullable=False) # ForeignKey(Entity.id)
-    attribute_id = Column(Integer, nullable=False) # ForeignKey(Attribute.id), 
+    attribute_id = Column(Integer, nullable=False) # ForeignKey(Attribute.id),
     pgtype_id = Column(Integer, ForeignKey(PgType.id), nullable=False)
     # TODO: deal with the physical model
     # creation_template_override
-    # type-args 
+    # type-args
     # required (NULL/NOT NULL)
     # unique constraints (etc.)
 
 # TODO:
 # Concept of Interfaces
-# Computed Attributes 
+# Computed Attributes
 # Squishy entities. (jsonb instance_properties) on an entity would allow for
 #    an easy solution to where to stick 'extra/not-in-the-schema' data.
 #    Could be explicit or implicit. Explicit is easy stick a .extra field on.
@@ -142,7 +143,7 @@ class EntityAttribute(TemporalMixin, HistoryMixin, VersionedMixin, Base):
 # Question: Do you make the core Page/Routing types Entities or concrete ?
 # Ya want to make um concrete @ first but maybe its better that they are
 # Entities then if i need to glob attributes on, i'm not forced to do so
-# via raw sql migrations. also could support concurrent versions as far as 
+# via raw sql migrations. also could support concurrent versions as far as
 # dev_master/branch using something other than _published.
 
 # Page Designer

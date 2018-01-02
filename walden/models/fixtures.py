@@ -10,7 +10,7 @@ class Fixtures(object):
     def __init__(self, session):
         self.session = session
         self.master = None
-    
+
     def get_or_create(self, model, **kwargs):
         '''
         Creates an object or returns the object if exists
@@ -18,13 +18,13 @@ class Fixtures(object):
         from: http://stackoverflow.com/questions/2546207/does-sqlalchemy-have-an-equivalent-of-djangos-get-or-create
         '''
         instance = self.session.query(model).filter_by(**kwargs).first()
-    
+
         if not instance:
             instance = model(**kwargs)
             self.session.add(instance)
             self.session.commit()
         return instance
-    
+
     def run(self):
         # Create master branch
         self.master = self.get_or_create(core.Branch, **dict(
@@ -49,27 +49,27 @@ class Fixtures(object):
         except Exception as err:
             self.session.rollback()
             raise err
-        # 
+        #
         # Create some entities.
         self.add_entities()
         # Commit changes to db.
         self.session.commit()
-    
+
     def attribute_type_id(self, name):
         return self.session.query(core.AttributeType)\
                .filter(core.AttributeType.name == name)\
                .one().id
-    
+
     def pg_attribute_type_id(self, name):
         return self.session.query(core.PgType)\
                .filter(core.PgType.name == name)\
                .one().id
-    
+
     def application_type_id(self, name):
         return self.session.query(core.Application)\
                .filter(core.Application.name == name)\
                .one().id
-    
+
     @staticmethod
     def get_attributes_types():
         return [
@@ -102,7 +102,7 @@ class Fixtures(object):
                 branch_id=1, parent_id=0
             )
         ]
-    
+
     @staticmethod
     def get_pg_attributes_types():
         pg_types = [
@@ -200,7 +200,7 @@ class Fixtures(object):
             ptype.parent_id = 0
             ptype.branch_id = 1
         return pg_types
-    
+
     def add_entities(self):
         # Add Entities & associate attributes with them.
         User = self.get_or_create(core.Entity, **dict(
@@ -220,7 +220,7 @@ class Fixtures(object):
                 branch_id=self.master.id,
                 name="username",
                 description=u"Username. alphanumeric string with no spaces.",
-                type_id=self.attribute_type_id('String'),
+                attribute_type_id=self.attribute_type_id('String'),
             )),
             self.get_or_create(core.Attribute, **dict(
                 #entity_id=User.id,
@@ -229,7 +229,7 @@ class Fixtures(object):
                 branch_id=self.master.id,
                 name="first_name",
                 description=u"Persons first name.",
-                type_id=self.attribute_type_id('String'),
+                attribute_type_id=self.attribute_type_id('String'),
             )),
             self.get_or_create(core.Attribute, **dict(
                 #entity_id=User.id,
@@ -238,7 +238,7 @@ class Fixtures(object):
                 branch_id=self.master.id,
                 name="last_name",
                 description=u"Persons last name.",
-                type_id=self.attribute_type_id('String'),
+                attribute_type_id=self.attribute_type_id('String'),
             )),
             self.get_or_create(core.Attribute, **dict(
                 #entity_id=User.id,
@@ -247,7 +247,7 @@ class Fixtures(object):
                 branch_id=self.master.id,
                 name="email",
                 description=u"Email address.",
-                type_id=self.attribute_type_id('String'),
+                attribute_type_id=self.attribute_type_id('String'),
             )),
             self.get_or_create(core.Attribute, **dict(
                 #entity_id=User.id,
@@ -256,7 +256,7 @@ class Fixtures(object):
                 branch_id=self.master.id,
                 name="password",
                 description=u"Super spy password.",
-                type_id=self.attribute_type_id('String'),
+                attribute_type_id=self.attribute_type_id('String'),
             )),
         ]
         # create attrs.
@@ -271,7 +271,7 @@ class Fixtures(object):
                 parent_id=0,
                 pgtype_id=self.pg_attribute_type_id('character varying')
             ))
-        
+
 
 
 if __name__ == '__main__':

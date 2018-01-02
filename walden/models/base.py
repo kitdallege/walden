@@ -10,9 +10,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 #_data : stores all data temporally (eg: denormalized fk's etc.)
 #_master : view into 'master' branch of _data (normalized fk's etc.)
 #_{branch.name} : development
-Base          = declarative_base(metadata=MetaData(schema='walden'))
+Base          = declarative_base(metadata=MetaData(schema='walden_data'))
 PublishedBase = declarative_base(metadata=MetaData(schema='walden_published'))
-HistoryBase   = declarative_base(metadata=MetaData(schema='walden_history'))
+MasterBase    = declarative_base(metadata=MetaData(schema='walden_master'))
 
 
 # Std Columns
@@ -40,7 +40,7 @@ class HistoryMixin(object):
 class VersionedMixin(object):
     @declared_attr
     def branch_id(cls):
-        return Column('branch_id', ForeignKey('branch.id'), nullable=False)
+        return Column('branch_id', Integer, nullable=False)
 
-    def branch(cls):
-        return relationship('Branch')
+    # def branch(cls):
+    #     return relationship('Branch')

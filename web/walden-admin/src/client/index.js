@@ -112,9 +112,15 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
             return result;
             break;
         case 'GET_ONE':
-        case 'DELETE':
+            debugger
+            return {
+                query: '',
+                variables: {id: params.id},
+                parseResponse: response => ({data:null, id:null})
+            }
             break;
         case 'CREATE':
+        case 'DELETE':
         case 'UPDATE':
             break;
         default:
