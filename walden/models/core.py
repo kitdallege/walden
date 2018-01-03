@@ -59,6 +59,10 @@ class Entity(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     # Abilities/Interfaces ? - these would be column aliases for
     #                          a given piece of functionality.
 
+# This could end up being just an enum type in postgresql as i don't think
+# it'll be changing that often. If we really want to decorate it, we could
+# have a AttributeTypeDisplay table which ties unique 'enum values of that type'
+# to shit like name/description.
 class AttributeType(TemporalMixin, HistoryMixin, VersionedMixin, Base):
     __tablename__ = 'walden_attribute_type'
     id = Column(Integer, primary_key=True, autoincrement='auto')

@@ -3,7 +3,7 @@ import { Admin, Resource } from 'react-admin';
 import buildGraphQLProvider from 'ra-data-graphql';
 import { createMuiTheme } from 'material-ui/styles';
 // walden
-import { EntityList, EntityShow } from './entities';
+import { EntityCreate, EntityList, EntityShow, EntityEdit } from './entities';
 import { introspectionOptions, buildQueryFactory} from './client';
 // import {
 //     CREATE,
@@ -27,7 +27,10 @@ class App extends Component {
         buildGraphQLProvider({
             introspection: introspectionOptions,
             client:{uri:'http://0.0.0.0:5000/graphql'},
-            buildQuery: buildQueryFactory
+            buildQuery: buildQueryFactory,
+            // resolveIntrospection: function () {
+            //     debugger
+            // }
         }).then(dataProvider => this.setState({dataProvider}));
     }
     render() {
@@ -40,7 +43,12 @@ class App extends Component {
                 dataProvider={dataProvider}
                 title="Walden Admin"
                 theme={theme}>
-                <Resource name="Entity" list={EntityList} show={EntityShow}/>
+                <Resource
+                    name="WaldenEntity"
+                    options={{ label: "Entities"}}
+                    create={EntityCreate}
+                    list={EntityList} show={EntityShow}
+                    edit={EntityEdit}/>
             </Admin>
         );
     }

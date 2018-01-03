@@ -17,10 +17,10 @@ import {
 // TODO: UPDATE CACHED SCHEMA ALL THE TIME. It works with introspection
 // but it def adds a chunk of time as its a heavy pull.
 export const introspectionOptions = {
-    schema,
+    //schema,
     operationNames: {
        [GET_LIST]: resource => `all${pluralize(resource.name)}`,
-       [GET_ONE]: resource  => `${resource.name.toLowerCase()}`,
+       [GET_ONE]: resource  => `get${resource.name}`,
        [GET_MANY]: resource => `all${pluralize(resource.name)}`,
        [GET_MANY_REFERENCE]: resource => `all${pluralize(resource.name)}`,
        [CREATE]: resource => `create${resource.name}`,
@@ -53,7 +53,8 @@ const getType = field => {
 
 const isResource = (field, resources) => {
     const type = getType(field);
-    return resources.some(({ name }) => name === type.name);
+    //return resources.some(({ name }) => name === type.name);
+    return resources.some(r => r.type.name === type.name);
 };
 
 const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) => {
@@ -65,7 +66,7 @@ const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) =
             try {
                 if (isSubObject(field, types) && depth < 4) {
                     let typeToCheck = getType(field);
-                    if (!isResource(field, resources)) {
+                    if (isResource(field, resources)) {
                         const type = types.find(t => t.name === typeToCheck.name);
                         const resource = introspectionResults.resources.find(r => r.type.name === type.name);
                         if (type && resource) {
@@ -84,13 +85,14 @@ const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) =
             } catch (err) {
                 debugger
             }
+            return false;
         })
         .filter(f => f !== false)
         .join(' ');
 }
 
 export const queryBuilder = introspectionResults => (aorFetchType, resourceName, params) => {
-    //debugger
+    console.debug(introspectionResults);
     const resource = introspectionResults.resources.find(r => r.type.name === resourceName);
     switch (aorFetchType) {
         case 'GET_LIST':
@@ -98,7 +100,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
         case 'GET_MANY_REFERENCE':
             const result =  {
                 query: gql`query ${resource[aorFetchType].name} {
-                    data: ${resource[aorFetchType].name}(last: 20) {
+                    data: ${resource[aorFetchType].name}(first: 20) {
                         items: nodes {
                             ${buildFieldList(introspectionResults, resource, aorFetchType)}
                         }
@@ -130,6 +132,6 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
 
 
 export const buildQueryFactory = function (introspectionResults, otherOptions) {
-    //debugger
+    // debugger
     return queryBuilder(introspectionResults)
 }
