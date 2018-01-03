@@ -6,9 +6,7 @@ import {
     , SimpleShowLayout
     , TextField
     , Create
-    , ReferenceInput
     , SimpleForm
-    , SelectInput
     , TextInput
     , Edit
     , DisabledInput

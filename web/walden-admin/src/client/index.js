@@ -1,6 +1,6 @@
 import { TypeKind } from 'graphql';
 import gql from 'graphql-tag';
-import { __schema as schema } from '../schema';
+// import { __schema as schema } from '../schema';
 import pluralize from 'pluralize';
 import {
     CREATE,
@@ -9,8 +9,7 @@ import {
     GET_MANY,
     GET_MANY_REFERENCE,
     UPDATE,
-    DELETE,
-    QUERY_TYPES,
+    DELETE
 } from 'react-admin';
 
 
@@ -94,11 +93,12 @@ const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) =
 export const queryBuilder = introspectionResults => (aorFetchType, resourceName, params) => {
     console.debug(introspectionResults);
     const resource = introspectionResults.resources.find(r => r.type.name === resourceName);
+    var result = {};
     switch (aorFetchType) {
         case 'GET_LIST':
         case 'GET_MANY':
         case 'GET_MANY_REFERENCE':
-            const result =  {
+            result =  {
                 query: gql`query ${resource[aorFetchType].name} {
                     data: ${resource[aorFetchType].name}(first: 20) {
                         items: nodes {
@@ -111,14 +111,16 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 parseResponse: response => ({'data': response.data.data.items, 'total': response.data.data.totalCount})
             };
             console.info(result);
-            return result;
             break;
         case 'GET_ONE':
-            debugger
-            return {
-                query: '',
+            result = {
+                query: gql`query ${resource[aorFetchType].name}($id: Int) {
+                    data: ${resource[aorFetchType].name}(arg0: $id) {
+                        ${buildFieldList(introspectionResults, resource, aorFetchType)}
+                    }
+                }`,
                 variables: {id: params.id},
-                parseResponse: response => ({data:null, id:null})
+                parseResponse: response => ({data:response.data.data, id:response.data.data.id})
             }
             break;
         case 'CREATE':
@@ -128,6 +130,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
         default:
             return undefined;
     }
+    return result;
 }
 
 
