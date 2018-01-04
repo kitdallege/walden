@@ -110,12 +110,11 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 variables: params, // params = { id: ... }
                 parseResponse: response => ({'data': response.data.data.items, 'total': response.data.data.totalCount})
             };
-            console.info(result);
             break;
         case 'GET_ONE':
             result = {
                 query: gql`query ${resource[aorFetchType].name}($id: Int) {
-                    data: ${resource[aorFetchType].name}(arg0: $id) {
+                    data: ${resource[aorFetchType].name}(id: $id) {
                         ${buildFieldList(introspectionResults, resource, aorFetchType)}
                     }
                 }`,
@@ -126,10 +125,12 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
         case 'CREATE':
         case 'DELETE':
         case 'UPDATE':
+            debugger
             break;
         default:
             return undefined;
     }
+    console.info(result);
     return result;
 }
 

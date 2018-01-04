@@ -55,3 +55,16 @@ export const EntityEdit = (props) => (
         </SimpleForm>
     </Edit>
 );
+
+
+export const AttributeList = (props) => (
+    <List {...props} title="Walden Attributes">
+        <Datagrid>
+            <TextField source="id" />
+            <TextField source="name" />
+            <TextField source="description" />
+            <TextField source="attributeType.name" label="Type"/>
+            <EditButton />
+        </Datagrid>
+    </List>
+);

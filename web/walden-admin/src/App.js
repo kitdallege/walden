@@ -3,7 +3,14 @@ import { Admin, Resource } from 'react-admin';
 import buildGraphQLProvider from 'ra-data-graphql';
 import { createMuiTheme } from 'material-ui/styles';
 // walden
-import { EntityCreate, EntityList, EntityShow, EntityEdit } from './entities';
+import {
+      EntityCreate
+    , EntityList
+    , EntityShow
+    , EntityEdit
+    , AttributeList
+} from './entities';
+import { ApplicationList, ApplicationEdit } from './applications';
 import { introspectionOptions, buildQueryFactory} from './client';
 // import {
 //     CREATE,
@@ -44,11 +51,21 @@ class App extends Component {
                 title="Walden Admin"
                 theme={theme}>
                 <Resource
+                    name="WaldenApplication"
+                    options={{ label: "Applications"}}
+                    list={ApplicationList}
+                    edit={ApplicationEdit}
+                    />
+                <Resource
                     name="WaldenEntity"
                     options={{ label: "Entities"}}
                     create={EntityCreate}
                     list={EntityList} show={EntityShow}
                     edit={EntityEdit}/>
+                <Resource
+                    name="WaldenAttribute"
+                    options={{ label: "Walden Attributes"}}
+                    list={AttributeList} />
             </Admin>
         );
     }

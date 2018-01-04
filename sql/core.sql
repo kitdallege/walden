@@ -1,6 +1,6 @@
 --- create 'proxy' views between walden_master -> walden_data schemas
 --- for the core `walden` non-entity types.
-CREATE OR REPLACE FUNCTION install_views()
+CREATE OR REPLACE FUNCTION walden_master.zzz_install_views()
 RETURNS VOID AS $f1$
     views = [
         'walden_application', 'walden_attribute', 'walden_attribute_type',
@@ -17,10 +17,10 @@ RETURNS VOID AS $f1$
                 stmt = 'CREATE OR REPLACE VIEW walden_master.{0} AS SELECT * FROM walden_data.{0};'.format(view)
             plpy.execute(stmt)
 $f1$ language plpythonu;
-COMMENT ON FUNCTION install_views() is 'Installs views in the walden_master schema for the core tables in walden_data.';
+COMMENT ON FUNCTION zzz_install_views() is 'Installs views in the walden_master schema for the core tables in walden_data.';
 
 -- Computed Columns
-CREATE OR REPLACE FUNCTION install_branch_fks()
+CREATE OR REPLACE FUNCTION walden_master.zzz_install_branch_fks()
 RETURNS VOID AS $f1$
     views = [
         'walden_application', 'walden_attribute', 'walden_attribute_type',
@@ -42,7 +42,7 @@ RETURNS VOID AS $f1$
             ).format(view)
             plpy.execute(stmt)
 $f1$ language plpythonu;
-COMMENT ON FUNCTION install_branch_fks() is 'Generates and installs functions which get walden_master.walden_branch for a given row.';
+COMMENT ON FUNCTION zzz_install_branch_fks() is 'Generates and installs functions which get walden_master.walden_branch for a given row.';
 
 CREATE OR REPLACE FUNCTION walden_master.walden_entity_application (walden_master.walden_entity)
 RETURNS walden_master.walden_application AS $$
@@ -106,30 +106,56 @@ $$ LANGUAGE SQL STABLE;
 --   [upcate, delete]{table-name.title}By[id || inst_id]
 
 -- get_object
-CREATE OR REPLACE FUNCTION walden_master.get_walden_entity (id INTEGER)
-RETURNS walden_master.walden_entity AS $$
-    SELECT DISTINCT ON (walden_entity.id)
-        walden_entity.*
-    FROM walden_master.walden_entity
-    WHERE walden_entity.id = id
-    ORDER BY walden_entity.id, walden_entity.inst_id DESC
-    LIMIT 1;
-$$ LANGUAGE SQL STABLE;
+CREATE OR REPLACE FUNCTION walden_master.zzz_create_get_object()
+RETURNS VOID AS $f1$
+    views = [
+        'walden_application', 'walden_attribute', 'walden_entity',
+        'walden_entity_attribute', 'walden_branch',
+        #'walden_attribute_type', 'walden_postgres_type',
+    ]
+    for view in views:
+        plpy.execute('DROP FUNCTION IF EXISTS walden_master.get_{0}(INTEGER)'.format(view))
+    for view in views:
+        stmt = (
+            'CREATE OR REPLACE FUNCTION walden_master.get_{0} (id INTEGER) '
+            'RETURNS walden_master.{0} AS $$ '
+            'SELECT DISTINCT ON ({0}.id) '
+            '{0}.* '
+            'FROM walden_master.{0} '
+            'WHERE {0}.id = $1 '
+            'ORDER BY {0}.id, {0}.inst_id DESC '
+            'LIMIT 1; '
+            '$$ LANGUAGE SQL STABLE;'
+        ).format(view)
+        plpy.execute(stmt)
+$f1$ LANGUAGE plpythonu;
+COMMENT ON FUNCTION walden_master.zzz_create_get_object() is 'Generates and installs functions which get views by their "id" column.';
 
-CREATE OR REPLACE FUNCTION walden_master.get_walden_application (id INTEGER)
-RETURNS walden_master.walden_application AS $$
-    SELECT DISTINCT ON (walden_application.id)
-        walden_application.*
-    FROM walden_master.walden_application
-    WHERE walden_application.id = id
-    ORDER BY walden_application.id, walden_application.inst_id DESC
-    LIMIT 1;
-$$ LANGUAGE SQL STABLE;
+-- CREATE OR REPLACE FUNCTION walden_master.get_walden_entity (id INTEGER)
+-- RETURNS walden_master.walden_entity AS $$
+--     SELECT DISTINCT ON (walden_entity.id)
+--         walden_entity.*
+--     FROM walden_master.walden_entity
+--     WHERE walden_entity.id = id
+--     ORDER BY walden_entity.id, walden_entity.inst_id DESC
+--     LIMIT 1;
+-- $$ LANGUAGE SQL STABLE;
+--
+-- CREATE OR REPLACE FUNCTION walden_master.get_walden_application (id INTEGER)
+-- RETURNS walden_master.walden_application AS $$
+--     SELECT DISTINCT ON (walden_application.id)
+--         walden_application.*
+--     FROM walden_master.walden_application
+--     WHERE walden_application.id = id
+--     ORDER BY walden_application.id, walden_application.inst_id DESC
+--     LIMIT 1;
+-- $$ LANGUAGE SQL STABLE;
+--
+
 
 -- Future but ASAP mmmkay.
-CREATE OR REPLACE FUNCTION upgrade_entity(entity walden_master.walden_entity)
+CREATE OR REPLACE FUNCTION zzz_upgrade_entity(entity walden_master.walden_entity)
 RETURNS VOID AS $$
-
     # all the logic here could be avoided w/a `walden_entity_version` table
     # which holds what version of an entity is installed where
     # [[schema name], [entity_id], [inst_id]]
@@ -151,7 +177,7 @@ RETURNS VOID AS $$
         # if no then its a clean creation
         # else: pull the column info
 $$ LANGUAGE plpythonu;
-COMMENT ON FUNCTION upgrade_entity(entity walden_master.walden_entity) is 'Upgrades the schema of an entity to the version specified';
+COMMENT ON FUNCTION zzz_upgrade_entity(entity walden_master.walden_entity) is 'Upgrades the schema of an entity to the version specified';
 
 /*
 -- just saving as a howto/example thing-er.
