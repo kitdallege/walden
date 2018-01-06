@@ -12,13 +12,13 @@ CREATE TABLE config
 
 CREATE TABLE walden_user
 (
-    id          SERIAL          NOT NULL PRIMARY KEY,
-    sys_period  TSTZRANGE       NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    username    VARCHAR(30)     NOT NULL UNIQUE,
-    first_name  VARCHAR(30)     NOT NULL,
-    last_name   VARCHAR(30)     NOT NULL,
-    email       VARCHAR(75)     NOT NULL,
-    password    VARCHAR(128)    NOT NULL
+    id          SERIAL      NOT NULL PRIMARY KEY,
+    sys_period  TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    username    TEXT        NOT NULL UNIQUE,
+    first_name  TEXT        NOT NULL,
+    last_name   TEXT        NOT NULL,
+    email       TEXT        NOT NULL,
+    password    TEXT        NOT NULL
 );
 ALTER TABLE walden_user OWNER to walden;
 COMMENT ON COLUMN walden_user.password IS 'Password uses [algo]$[salt]$[hexdigest].';
@@ -61,11 +61,11 @@ COMMENT ON TYPE entity_type is 'Types of Entity''s within the walden system';
 
 CREATE TABLE entity
 (
-    id          SERIAL                 NOT NULL PRIMARY KEY,
-    sys_period  tstzrange              NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    type        entity_type            NOT NULL DEFAULT 'TABLE',
-    schema      VARCHAR(256) NOT NULL, -- application
-    name        VARCHAR(256) NOT NULL,
+    id          SERIAL      NOT NULL PRIMARY KEY,
+    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    type        entity_type NOT NULL DEFAULT 'TABLE',
+    schema      TEXT        NOT NULL, -- application
+    name        TEXT        NOT NULL,
     UNIQUE (schema, name)
 );
 ALTER TABLE entity OWNER to walden;
@@ -102,16 +102,16 @@ COMMENT ON TABLE entity is 'An Entity within the walden system';
 
 CREATE TABLE asset
 (
-    id      SERIAL          NOT NULL PRIMARY KEY,
-    name    VARCHAR(256)    NOT NULL UNIQUE
+    id      SERIAL  NOT NULL PRIMARY KEY,
+    name    TEXT    NOT NULL UNIQUE
 );
 ALTER TABLE asset OWNER to walden;
 
 CREATE TABLE widget
 (
-    id      SERIAL          NOT NULL PRIMARY KEY,
-    name    VARCHAR(256)    NOT NULL UNIQUE,
-    title   VARCHAR(256)    NOT NULL
+    id      SERIAL  NOT NULL PRIMARY KEY,
+    name    TEXT    NOT NULL UNIQUE,
+    title   TEXT    NOT NULL
     -- js_assets
     -- css_assets
     -- template
@@ -121,9 +121,9 @@ ALTER TABLE widget OWNER to walden;
 
 CREATE TABLE page
 (
-    id      SERIAL          NOT NULL PRIMARY KEY,
-    name    VARCHAR(256)    NOT NULL UNIQUE,
-    title   VARCHAR(256)    NOT NULL
+    id      SERIAL  NOT NULL PRIMARY KEY,
+    name    TEXT    NOT NULL UNIQUE,
+    title   TEXT    NOT NULL
 );
 ALTER TABLE page OWNER to walden;
 
@@ -145,30 +145,30 @@ CREATE TYPE resource_type AS ENUM
 CREATE TABLE resource
 (
     id          SERIAL          NOT NULL PRIMARY KEY,
-    name        VARCHAR(256)    NOT NULL UNIQUE,
+    name        TEXT            NOT NULL UNIQUE,
     type        resource_type   NOT NULL,
     entity_id   INTEGER         NOT NULL REFERENCES entity(id),
-    children    VARCHAR(256)    NOT NULL DEFAULT ''
+    children    TEXT            NOT NULL DEFAULT ''
 );
 
 CREATE TABLE taxonomy
 (
-    id      SERIAL          NOT NULL PRIMARY KEY,
-    name    VARCHAR(256)    NOT NULL UNIQUE
+    id      SERIAL  NOT NULL PRIMARY KEY,
+    name    TEXT    NOT NULL UNIQUE
 );
 CREATE TABLE taxon
 (
-    id          SERIAL          NOT NULL PRIMARY KEY,
-    name        VARCHAR(256)    NOT NULL,
-    parent_path LTREE           NOT NULL UNIQUE,
-    resource_id INTEGER         NOT NULL REFERENCES resource(id),
-    page_id     INTEGER         NOT NULL REFERENCES page(id)
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    name        TEXT    NOT NULL,
+    parent_path LTREE   NOT NULL UNIQUE,
+    resource_id INTEGER NOT NULL REFERENCES resource(id),
+    page_id     INTEGER NOT NULL REFERENCES page(id)
 );
 CREATE TABLE entity_taxon
 (
-    id          SERIAL          NOT NULL PRIMARY KEY,
-    entity_id   INTEGER REFERENCES entity(id),
-    taxon_id    INTEGER REFERENCES taxon(id),
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    entity_id   INTEGER NOT NULL REFERENCES entity(id),
+    taxon_id    INTEGER NOT NULL REFERENCES taxon(id),
     UNIQUE (entity_id, taxon_id)
 );
 -- Routes
