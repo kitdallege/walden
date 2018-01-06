@@ -1,5 +1,8 @@
+-- complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION walden" to load this file. \quit
+
 -- The Application
-SET search_path TO 'walden';
+--SET search_path TO 'walden';
 
 -- Models
 CREATE TABLE walden_user
@@ -28,14 +31,21 @@ FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
 /*
  Application : Typicall a schema, used as a unique namespace. ? extensions name
 
- EntityType : table/view
- Entity : row
+ Entity : table/view (technically its an entity-type but that sounds clunky
+          so we use Entity to refer to the type and EntityInstance to refer
+          to an instance of that type.
 
- Taxonomy : Tree of urls
- Taxon : A given url in the tree
+ Taxonomy : Tree of urls *classification of data from /least/to/greatest specifity.
+ Taxon : A given ('node') in the taxonomy tree.
 
- ResourceType/Format/???yesod has a name for um?
+ ResourceType/Format/ContentType : the type of file were writing
  Resource : Exposes an entity for a given ResourceType
+
+ So we create a Taxonomy for a given site:
+ At each 'taxon' we define a resource.
+ A resource can be anything a flatpage to a redirect (ln)
+ Non-leaf resources are able to generate more resources.
+
 */
 CREATE TYPE entity_type AS ENUM
 (

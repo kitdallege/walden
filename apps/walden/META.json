@@ -1,0 +1,47 @@
+{
+   "name": "walden",
+   "abstract": "A web development platform within PostgreSQL.",
+   "description": "This library provides a core functionaliy for creating web sites/pages from within PostgreSQL.",
+   "version": "0.1.0",
+   "maintainer": [
+      "Kit C. Dallege <kit.dallege@gmail.com>"
+   ],
+   "license": "postgresql",
+   "prereqs": {
+        "runtime": {
+            "requires": {
+                "PostgreSQL": ">= 9.6.0",
+                "plpgsql": ">=1.0",
+                "plpythonu": ">=1.0",
+                "temporal_tables": "1.2.0"
+            }
+        }
+   },
+   "provides": {
+      "walden": {
+         "abstract": "A web development platform within PostgreSQL.",
+         "file": "sql/walden--0.1.0.sql",
+         "docfile": "doc/walden.md",
+         "version": "0.1.0"
+      }
+   },
+   "resources": {
+      "bugtracker": {
+         "web": "http://github.com/kitdallege/walden/issues/"
+      },
+      "repository": {
+        "url":  "git://github.com/kitdallege/walden.git",
+        "web":  "http://github.com/kitdallege/walden/",
+        "type": "git"
+      }
+   },
+   "generated_by": "Kit C. Dallege",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "http://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "web development",
+      "entity system"
+   ]
+}
