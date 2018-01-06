@@ -16,10 +16,9 @@ import {
 export const EntityList = (props) => (
     <List {...props} title="Entity's">
         <Datagrid>
-            <TextField source="id" />
-            <TextField source="application.name" label="Application"/>
+            <TextField source="rowId" />
+            <TextField source="schema" label="Application"/>
             <TextField source="name" label="Entity"/>
-            <TextField source="description" />
             <EditButton/>
         </Datagrid>
     </List>
@@ -28,7 +27,7 @@ export const EntityList = (props) => (
 export const EntityShow = (props) => (
     <Show {...props}>
         <SimpleShowLayout>
-            <TextField source="id" />
+            <TextField source="rowId" />
             <TextField source="name" />
             <TextField source="description" />
         </SimpleShowLayout>
@@ -50,21 +49,8 @@ export const EntityEdit = (props) => (
     <Edit {...props}>
         <SimpleForm>
             <DisabledInput label="Id" source="id" />
+            <TextInput source="schema" />
             <TextInput source="name" />
-            <TextInput source="description" />
         </SimpleForm>
     </Edit>
-);
-
-
-export const AttributeList = (props) => (
-    <List {...props} title="Walden Attributes">
-        <Datagrid>
-            <TextField source="id" />
-            <TextField source="name" />
-            <TextField source="description" />
-            <TextField source="attributeType.name" label="Type"/>
-            <EditButton />
-        </Datagrid>
-    </List>
 );

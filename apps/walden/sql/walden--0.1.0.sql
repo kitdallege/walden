@@ -1,3 +1,10 @@
+-- TODO: At some point break the tables out into a function or series of
+-- functions. The main problem with having them within the extension is
+-- mostly pg_dump not being able to dump the contents. Also if someone
+-- where to Drop Extension they'd whipe out all the tables. Whilst that
+-- maybe be desired, it shouldn't be default. So instead lets try to make
+-- walden_[install, uninstall]_tables functions that a user can use to
+-- create/destory the extensions tables/indexes/sequences etc..
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
@@ -99,13 +106,23 @@ COMMENT ON TABLE entity is 'An Entity within the walden system';
 
 
 */
-
+CREATE TYPE asset_type Enum
+(
+    'CSS',
+    'JS',
+    'IMG',
+    'FILE'
+);
 CREATE TABLE asset
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE
+    name    TEXT    NOT NULL UNIQUE,
+    type    asset_type NOT NULL DEFAULT 'FILE'
 );
 ALTER TABLE asset OWNER to walden;
+/* maybe a table per asset type using inheritance ?*/
+
+
 
 CREATE TABLE widget
 (
@@ -202,10 +219,11 @@ INSERT INTO taxon (name, parent_path, resource_id, page_id)
     static type checking.
 
     Functions are the dynamic component. The only checking they recieve is on
-    input/output types. As long as your not removing a type which a function
-    returns, they could care less how you change the schema. This means if
-    a function selects from a table, and that table alters their schema then
-    there is a chance a run-time error has been introduced.
+    creation and their input/output types. Otherwise , as long as your not
+    removing a type which a function takes/returns, they could care less how
+    you change the schema. This means if a function selects from a
+    table, and that table alters their schema then there is a chance a
+    run-time error has been introduced.
 
     * Test functions which take and/or return Entities.
 

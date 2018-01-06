@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Admin, Resource } from 'react-admin';
+import { Admin, Resource, Delete } from 'react-admin';
 import buildGraphQLProvider from 'ra-data-graphql';
 import { createMuiTheme } from 'material-ui/styles';
 // walden
@@ -8,9 +8,9 @@ import {
     , EntityList
     , EntityShow
     , EntityEdit
-    , AttributeList
 } from './entities';
-import { ApplicationList, ApplicationEdit } from './applications';
+import BuildIcon from 'material-ui-icons/Build'; // ? this seems wrong to me.
+import { TaxonomyList, TaxonomyEdit } from './taxonomy';
 import { introspectionOptions, buildQueryFactory} from './client';
 // import {
 //     CREATE,
@@ -51,23 +51,30 @@ class App extends Component {
                 title="Walden Admin"
                 theme={theme}>
                 <Resource
-                    name="WaldenApplication"
-                    options={{ label: "Applications"}}
-                    list={ApplicationList}
-                    edit={ApplicationEdit}
-                    />
-                <Resource
-                    name="WaldenEntity"
-                    options={{ label: "Entities"}}
+                    name="Entity"
+                    icon={BuildIcon}
                     create={EntityCreate}
                     list={EntityList} show={EntityShow}
-                    edit={EntityEdit}/>
+                    edit={EntityEdit}
+                    remove={Delete}/>
                 <Resource
-                    name="WaldenAttribute"
-                    options={{ label: "Walden Attributes"}}
-                    list={AttributeList} />
+                    name="Taxonomy"
+                    list={TaxonomyList}
+                    edit={TaxonomyEdit}
+                    />
             </Admin>
         );
+        /*
+        <Resource
+            name="Taxonomy"
+            list={TaxonomyList}
+            edit={TaxonomyEdit}
+            />
+        <Resource
+            name="Taxon"
+            list={TaxonList}
+            edit={TaxonEdit}/>
+        */
     }
 }
 

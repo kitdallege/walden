@@ -19,7 +19,7 @@ export const introspectionOptions = {
     //schema,
     operationNames: {
        [GET_LIST]: resource => `all${pluralize(resource.name)}`,
-       [GET_ONE]: resource  => `get${resource.name}`,
+       [GET_ONE]: resource  => `${resource.name.toLowerCase()}`,
        [GET_MANY]: resource => `all${pluralize(resource.name)}`,
        [GET_MANY_REFERENCE]: resource => `all${pluralize(resource.name)}`,
        [CREATE]: resource => `create${resource.name}`,
@@ -80,7 +80,11 @@ const buildFieldList = (introspectionResults, resource, aorFetchType, depth=0) =
                     }
                     return false;
                 }
-                return field.name;
+                if (field.name !== 'id') {
+                    return field.name;
+                } else {
+                    return 'rowId:id';
+                }
             } catch (err) {
                 debugger
             }
@@ -103,19 +107,24 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                     data: ${resource[aorFetchType].name}(first: 20) {
                         items: nodes {
                             ${buildFieldList(introspectionResults, resource, aorFetchType)}
+                            id: nodeId
                         }
                         totalCount
                     }
                 }`,
                 variables: params, // params = { id: ... }
-                parseResponse: response => ({'data': response.data.data.items, 'total': response.data.data.totalCount})
+                parseResponse: response => ({
+                    'data': response.data.data.items,
+                    'total': response.data.data.totalCount
+                })
             };
             break;
         case 'GET_ONE':
             result = {
-                query: gql`query ${resource[aorFetchType].name}($id: Int) {
-                    data: ${resource[aorFetchType].name}(id: $id) {
+                query: gql`query ${resource[aorFetchType].name}($id: ID!) {
+                    data: ${resource[aorFetchType].name}(nodeId: $id) {
                         ${buildFieldList(introspectionResults, resource, aorFetchType)}
+                        id: nodeId
                     }
                 }`,
                 variables: {id: params.id},
