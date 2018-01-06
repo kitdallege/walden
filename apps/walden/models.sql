@@ -25,6 +25,18 @@ BEFORE INSERT OR UPDATE OR DELETE ON walden_user
 FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
                                           'walden_history.walden_user',
                                           true);
+/*
+ Application : Typicall a schema, used as a unique namespace. ? extensions name
+
+ EntityType : table/view
+ Entity : row
+
+ Taxonomy : Tree of urls
+ Taxon : A given url in the tree
+
+ ResourceType/Format/???yesod has a name for um?
+ Resource : Exposes an entity for a given ResourceType
+*/
 CREATE TYPE entity_type AS ENUM
 (
     'TABLE',
@@ -128,5 +140,25 @@ ALTER TABLE widget_on_page OWNER to walden;
     there is a chance a run-time error has been introduced.
 
     * Test functions which take and/or return Entities.
+
+    So tabels are models.
+    Functions which take a table are model methods.
+
+    Intefaces & Abilities.
+    the 'register function' + registery pattern is very useful for providing
+    augmenting an 'entity' with an 'ability'.
+    For more complex 'abilities' types can be used to simulate interfaces.
+    create a type which describes your interface.
+    create model methods to implement the type.
+    then just create a registry with a register function
+    that allows ya to hook (table, inteface_methods...).
+
+    At some point split models.sql into /models/[specific-files].sql
+    Sort of the typical django(ish) web app layout, just with a lot of sql.
+        * maybe a tool @ some point that runs off an app.yaml
+          to do schema migrations and like auto register stuff.
+
+
+
 
 */
