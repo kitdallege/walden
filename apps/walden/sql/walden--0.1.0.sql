@@ -1,10 +1,15 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
--- The Application
---SET search_path TO 'walden';
+CREATE TYPE host_role AS ENUM ('DEVELOPMENT', 'ADMIN', 'PRODUCTION');
+CREATE TABLE config
+(
+    id          SERIAL          NOT NULL PRIMARY KEY,
+    sys_period  TSTZRANGE       NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    host_role   host_role       NOT NULL DEFAULT 'DEVELOPMENT',
+    configs     JSONB           NOT NULL DEFAULT '{}'::JSONB
+);
 
--- Models
 CREATE TABLE walden_user
 (
     id          SERIAL          NOT NULL PRIMARY KEY,
@@ -59,11 +64,11 @@ CREATE TABLE entity
     id          SERIAL                 NOT NULL PRIMARY KEY,
     sys_period  tstzrange              NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
     type        entity_type            NOT NULL DEFAULT 'TABLE',
-    --schema character varying(256) NOT NULL, -- application
-    name        character varying(256) NOT NULL UNIQUE
+    schema      VARCHAR(256) NOT NULL, -- application
+    name        VARCHAR(256) NOT NULL,
+    UNIQUE (schema, name)
 );
 ALTER TABLE entity OWNER to walden;
-
 COMMENT ON TABLE entity is 'An Entity within the walden system';
 /*
  Need to design 'for' the task @ hand.
@@ -94,6 +99,7 @@ COMMENT ON TABLE entity is 'An Entity within the walden system';
 
 
 */
+
 CREATE TABLE asset
 (
     id      SERIAL          NOT NULL PRIMARY KEY,
@@ -123,18 +129,70 @@ ALTER TABLE page OWNER to walden;
 
 CREATE TABLE widget_on_page
 (
-    id      SERIAL NOT NULL PRIMARY KEY,
-    page    INTEGER NOT NULL REFERENCES page(id),
-    widget  INTEGER NOT NULL REFERENCES widget(id)
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    page_id     INTEGER NOT NULL REFERENCES page(id),
+    widget_id   INTEGER NOT NULL REFERENCES widget(id)
 
 );
 ALTER TABLE widget_on_page OWNER to walden;
+
+CREATE TYPE resource_type AS ENUM
+(
+    'STATIC',
+    'LIST',
+    'DETAIL'
+);
+CREATE TABLE resource
+(
+    id          SERIAL          NOT NULL PRIMARY KEY,
+    name        VARCHAR(256)    NOT NULL UNIQUE,
+    type        resource_type   NOT NULL,
+    entity_id   INTEGER         NOT NULL REFERENCES entity(id),
+    children    VARCHAR(256)    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE taxonomy
+(
+    id      SERIAL          NOT NULL PRIMARY KEY,
+    name    VARCHAR(256)    NOT NULL UNIQUE
+);
+CREATE TABLE taxon
+(
+    id          SERIAL          NOT NULL PRIMARY KEY,
+    name        VARCHAR(256)    NOT NULL,
+    parent_path LTREE           NOT NULL UNIQUE,
+    resource_id INTEGER         NOT NULL REFERENCES resource(id),
+    page_id     INTEGER         NOT NULL REFERENCES page(id)
+);
+CREATE TABLE entity_taxon
+(
+    id          SERIAL          NOT NULL PRIMARY KEY,
+    entity_id   INTEGER REFERENCES entity(id),
+    taxon_id    INTEGER REFERENCES taxon(id),
+    UNIQUE (entity_id, taxon_id)
+);
 -- Routes
 -- Queries
 -- View
 -- Templates
 -- Assets
 --
+
+
+/**************************************************************
+ *                      DATA                                  *
+ **************************************************************/
+INSERT INTO entity (type, schema, name)
+    VALUES ('TABLE', 'walden', 'walden_user');
+INSERT INTO resource (name, type, entity_id)
+    VALUES ('user-list', 'LIST', 1);
+INSERT INTO taxonomy (name)
+    VALUES ('ComeToVegas');
+INSERT INTO page (name, title)
+    VALUES ('home', 'my awesome homepage');
+INSERT INTO taxon (name, parent_path, resource_id, page_id)
+    VALUES ('all users', 'root.users', 1, 1);
+
 
 /*
     Views make explicit the required columns from a given table. If the

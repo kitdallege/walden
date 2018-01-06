@@ -2,5 +2,5 @@
 comment = 'A web system for postgresql'
 default_version = '0.1.0'
 module_pathname = '$libdir/walden'
-requires = 'plpgsql, plpythonu, temporal_tables'
+requires = 'plpgsql, plpythonu, ltree, temporal_tables'
 relocatable = true
