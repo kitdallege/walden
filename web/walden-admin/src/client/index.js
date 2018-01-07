@@ -180,7 +180,39 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
             };
             break;
         case 'UPDATE':
-            debugger
+            var mutIdDest = new Uint32Array(1);
+            window.crypto.getRandomValues(mutIdDest);
+            var fields = buildFieldList(
+                    introspectionResults, resource, aorFetchType
+                ).replace('nodeId', '').replace('rowId:id', 'id');
+            const inputData = Object.keys(params.data)
+                .filter(key => !(['nodeId', '__typename', 'id'].includes(key)))
+                .reduce((obj, key) => {
+                    if (key !== 'rowId') {
+                        obj[key] = params.data[key];
+                    } else {
+                        obj['id'] = params.data['rowId'];
+                    }
+                    return obj;
+                }, {});
+            result = {
+                query: gql`mutation ${resourceName}($input: Update${resourceName}Input!) {
+                    ${resource[aorFetchType].name}(input: $input) {
+                        data: ${resourceName.toLowerCase()} {${fields}}
+                    }
+                }`,
+                variables: {
+                    input: {
+                        'clientMutationId': mutIdDest[0].toString(16),
+                        'nodeId': params.id,
+                        [`${resourceName.toLowerCase()}Patch`]: inputData
+                    }
+                },
+                parseResponse: (response) => {
+                    const data = response.data[resource[aorFetchType].name].data;
+                    return {data:data, id:data.nodeId};
+                }
+            };
             break;
         default:
             return undefined;
