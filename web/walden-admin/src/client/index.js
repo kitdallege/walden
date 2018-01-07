@@ -102,6 +102,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
         case 'GET_LIST':
         case 'GET_MANY':
         case 'GET_MANY_REFERENCE':
+            // TODO: Implement pagination args.
             result =  {
                 query: gql`query ${resource[aorFetchType].name} {
                     data: ${resource[aorFetchType].name}(first: 20) {
@@ -129,10 +130,55 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 }`,
                 variables: {id: params.id},
                 parseResponse: response => ({data:response.data.data, id:response.data.data.id})
-            }
+            };
             break;
         case 'CREATE':
+            var mutIdDest = new Uint32Array(1);
+            window.crypto.getRandomValues(mutIdDest);
+            result = {
+                query: gql`mutation ${resourceName}($input: Create${resourceName}Input!) {
+                    ${resource[aorFetchType].name}(input: $input) {
+                        data: ${resourceName.toLowerCase()} {
+                            ${buildFieldList(introspectionResults, resource, aorFetchType)}
+                        }
+                    }
+                }`,
+                variables: {
+                    input: {
+                        'clientMutationId': mutIdDest[0].toString(16),
+                        [`${resourceName.toLowerCase()}`]: params.data
+                    }
+                },
+                parseResponse: (response) => {
+                    const data = response.data[resource[aorFetchType].name].data;
+                    return {data:data, id:data.nodeId};
+                }
+            };
+            break;
         case 'DELETE':
+            var mutIdDest = new Uint32Array(1);
+            window.crypto.getRandomValues(mutIdDest);
+            result = {
+                query: gql`mutation ${resourceName}($input: Delete${resourceName}Input!) {
+                    ${resource[aorFetchType].name}(input: $input) {
+                        data: ${resourceName.toLowerCase()} {
+                            ${buildFieldList(introspectionResults, resource, aorFetchType)}
+                        }
+                    }
+                }`,
+                variables: {
+                    input: {
+                        'clientMutationId': mutIdDest[0].toString(16),
+                        'nodeId': params.id,
+                        [`${resourceName.toLowerCase()}`]: params.data
+                    }
+                },
+                parseResponse: function (response) {
+                    const data = response.data[resource[aorFetchType].name].data;
+                    return {data:data, id:data.nodeId};
+                }
+            };
+            break;
         case 'UPDATE':
             debugger
             break;

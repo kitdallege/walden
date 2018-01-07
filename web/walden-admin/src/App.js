@@ -6,11 +6,16 @@ import { createMuiTheme } from 'material-ui/styles';
 import {
       EntityCreate
     , EntityList
-    , EntityShow
+    //, EntityShow
     , EntityEdit
 } from './entities';
 import BuildIcon from 'material-ui-icons/Build'; // ? this seems wrong to me.
-import { TaxonomyList, TaxonomyEdit } from './taxonomy';
+import {
+      TaxonomyList
+    , TaxonomyEdit
+    , TaxonomyCreate
+    , TaxonomyShow
+} from './taxonomy';
 import { introspectionOptions, buildQueryFactory} from './client';
 // import {
 //     CREATE,
@@ -54,14 +59,16 @@ class App extends Component {
                     name="Entity"
                     icon={BuildIcon}
                     create={EntityCreate}
-                    list={EntityList} show={EntityShow}
+                    list={EntityList}
+                    /* show={EntityShow} */
                     edit={EntityEdit}
                     remove={Delete}/>
                 <Resource
                     name="Taxonomy"
-                    list={TaxonomyList}
+                    create={TaxonomyCreate}
+                    list={TaxonomyList} show={TaxonomyShow}
                     edit={TaxonomyEdit}
-                    />
+                    remove={Delete}/>
             </Admin>
         );
         /*
