@@ -12,6 +12,18 @@ CREATE TABLE taxonomy
 );
 ALTER TABLE taxonomy OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('taxonomy', '');
+COMMENT ON TABLE taxonomy is '';
+/*
+CREATE TABLE walden_history.walden_user (LIKE walden_user);
+
+-- Add the trigger for versioning.
+CREATE TRIGGER walden_user_versioning_trigger
+BEFORE INSERT OR UPDATE OR DELETE ON walden_user
+FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
+                                          'walden_history.walden_user',
+                                          true);
+*/
+
 
 CREATE TABLE taxon
 (
