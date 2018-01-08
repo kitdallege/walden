@@ -8,6 +8,7 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
+
 CREATE TYPE host_role AS ENUM ('DEVELOPMENT', 'ADMIN', 'PRODUCTION');
 CREATE TABLE config
 (
@@ -44,25 +45,7 @@ BEFORE INSERT OR UPDATE OR DELETE ON walden_user
 FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
                                           'walden_history.walden_user',
                                           true);
-/*
- Application : Typicall a schema, used as a unique namespace. ? extensions name
 
- Entity : table/view (technically its an entity-type but that sounds clunky
-          so we use Entity to refer to the type and EntityInstance to refer
-          to an instance of that type.
-
- Taxonomy : Tree of urls *classification of data from /least/to/greatest specifity.
- Taxon : A given ('node') in the taxonomy tree.
-
- ResourceType/Format/ContentType : the type of file were writing
- Resource : Exposes an entity for a given ResourceType
-
- So we create a Taxonomy for a given site:
- At each 'taxon' we define a resource.
- A resource can be anything a flatpage to a redirect (ln)
- Non-leaf resources are able to generate more resources.
-
-*/
 CREATE TABLE application
 (
     id          SERIAL      NOT NULL PRIMARY KEY,
@@ -92,35 +75,7 @@ CREATE TABLE entity
 );
 ALTER TABLE entity OWNER to walden;
 COMMENT ON TABLE entity is 'An Entity within the walden system';
-/*
- Need to design 'for' the task @ hand.
 
- On change a record is wrote in a 'pending_publish' table and a notification
- is sent out for the Publisher
-
- The publisher job is to watch for notifications, upon recieving one, look
- in the pending_publish table. If it missed the notification it can still
- perform the publish by just polling the pending_publish table.
-
- The publisher needs to:
-    * Find all widgets that use an entity
-    * Re-Render those.
-
- Entity <- Query <- WidgetQuery -> Widget <- WidgetOnPage -> Page(view) -> Route -> Entity
-
- Taxonomy
-  A tree of resources
-
-  they can be either/both of:
-    - static : (leaf)
-    - dynamic : (branch)
-
-  Both is actually quite common, typically they are landing pages for
-  applications.
-
-
-
-*/
 CREATE TYPE asset_type AS ENUM
 (
     'CSS',
@@ -153,11 +108,20 @@ ALTER TABLE widget OWNER to walden;
 
 CREATE TABLE page
 (
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE,
-    title   TEXT    NOT NULL
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    name        TEXT    NOT NULL UNIQUE,
+    title       TEXT    NOT NULL
 );
 ALTER TABLE page OWNER to walden;
+-- Create a history table in walden_history
+CREATE TABLE walden_history.page (LIKE page);
+-- Add the trigger for versioning.
+CREATE TRIGGER walden_user_versioning_trigger
+BEFORE INSERT OR UPDATE OR DELETE ON page
+FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
+                                          'walden_history.page',
+                                          true);
 
 CREATE TABLE widget_on_page
 (
@@ -211,6 +175,7 @@ CREATE TABLE resource
 );
 ALTER TABLE resource OWNER to walden;
 
+/*
 CREATE TABLE taxonomy
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
@@ -236,6 +201,7 @@ CREATE TABLE entity_taxon
     UNIQUE (entity_id, taxon_id)
 );
 ALTER TABLE entity_taxon OWNER to walden;
+*/
 -- Routes
 -- Queries
 -- View
@@ -253,12 +219,8 @@ INSERT INTO entity (type, schema, name)
     VALUES ('TABLE', 'walden', 'walden_user');
 INSERT INTO resource (name, type, entity_id)
     VALUES ('user-list', 'LIST', 1);
-INSERT INTO taxonomy (name)
-    VALUES ('ComeToVegas');
 INSERT INTO page (name, title)
     VALUES ('home', 'my awesome homepage');
-INSERT INTO taxon (name, parent_path, resource_id, page_id)
-    VALUES ('all users', 'root.users', 1, 1);
 INSERT INTO db_query (name, statement)
     VALUES ('get_users_list', 'allWaldenUsers{ users:nodes{ id firstName lastName username } }');
 INSERT INTO query_entity_ref (entity_id, query_id)
