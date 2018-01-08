@@ -98,6 +98,9 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
     console.debug(introspectionResults);
     const resource = introspectionResults.resources.find(r => r.type.name === resourceName);
     var result = {};
+    var mutIdDest = new Uint32Array(1);
+    window.crypto.getRandomValues(mutIdDest);
+    const clientMutationId = mutIdDest[0].toString(16);
     switch (aorFetchType) {
         case 'GET_LIST':
         case 'GET_MANY':
@@ -133,8 +136,6 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
             };
             break;
         case 'CREATE':
-            var mutIdDest = new Uint32Array(1);
-            window.crypto.getRandomValues(mutIdDest);
             result = {
                 query: gql`mutation ${resourceName}($input: Create${resourceName}Input!) {
                     ${resource[aorFetchType].name}(input: $input) {
@@ -145,7 +146,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 }`,
                 variables: {
                     input: {
-                        'clientMutationId': mutIdDest[0].toString(16),
+                        'clientMutationId': clientMutationId,
                         [`${resourceName.toLowerCase()}`]: params.data
                     }
                 },
@@ -156,8 +157,6 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
             };
             break;
         case 'DELETE':
-            var mutIdDest = new Uint32Array(1);
-            window.crypto.getRandomValues(mutIdDest);
             result = {
                 query: gql`mutation ${resourceName}($input: Delete${resourceName}Input!) {
                     ${resource[aorFetchType].name}(input: $input) {
@@ -168,7 +167,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 }`,
                 variables: {
                     input: {
-                        'clientMutationId': mutIdDest[0].toString(16),
+                        'clientMutationId': clientMutationId,
                         'nodeId': params.id,
                         [`${resourceName.toLowerCase()}`]: params.data
                     }
@@ -180,9 +179,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
             };
             break;
         case 'UPDATE':
-            var mutIdDest = new Uint32Array(1);
-            window.crypto.getRandomValues(mutIdDest);
-            var fields = buildFieldList(
+            const fields = buildFieldList(
                     introspectionResults, resource, aorFetchType
                 ).replace('nodeId', '').replace('rowId:id', 'id');
             const inputData = Object.keys(params.data)
@@ -203,7 +200,7 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
                 }`,
                 variables: {
                     input: {
-                        'clientMutationId': mutIdDest[0].toString(16),
+                        'clientMutationId': clientMutationId,
                         'nodeId': params.id,
                         [`${resourceName.toLowerCase()}Patch`]: inputData
                     }

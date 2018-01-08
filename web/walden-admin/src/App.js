@@ -6,7 +6,7 @@ import { createMuiTheme } from 'material-ui/styles';
 import {
       EntityCreate
     , EntityList
-    //, EntityShow
+    //, EntityShow // Currently Broken for whatever reason.
     , EntityEdit
 } from './entities';
 import BuildIcon from 'material-ui-icons/Build'; // ? this seems wrong to me.
@@ -15,19 +15,11 @@ import {
     , TaxonomyEdit
     , TaxonomyCreate
     , TaxonomyShow
+    , TaxonList
+    , TaxonCreate
+    , TaxonEdit
 } from './taxonomy';
 import { introspectionOptions, buildQueryFactory} from './client';
-// import {
-//     CREATE,
-//     GET_LIST,
-//     GET_ONE,
-//     GET_MANY,
-//     GET_MANY_REFERENCE,
-//     UPDATE,
-//     DELETE,
-//     QUERY_TYPES,
-// } from 'react-admin';
-
 const theme = createMuiTheme({palette: {type: 'dark'}});
 
 class App extends Component {
@@ -40,9 +32,7 @@ class App extends Component {
             introspection: introspectionOptions,
             client:{uri:'http://0.0.0.0:5000/graphql'},
             buildQuery: buildQueryFactory,
-            // resolveIntrospection: function () {
-            //     debugger
-            // }
+            // resolveIntrospection: function () {debugger}
         }).then(dataProvider => this.setState({dataProvider}));
     }
     render() {
@@ -63,25 +53,29 @@ class App extends Component {
                     /* show={EntityShow} */
                     edit={EntityEdit}
                     remove={Delete}/>
+                <Resource name="EntityTaxon" />
                 <Resource
                     name="Taxonomy"
                     create={TaxonomyCreate}
                     list={TaxonomyList} show={TaxonomyShow}
                     edit={TaxonomyEdit}
                     remove={Delete}/>
+                <Resource
+                    name="Taxon"
+                    create={TaxonCreate}
+                    list={TaxonList}
+                    edit={TaxonEdit} />
+                <Resource name="Page" />
+                <Resource name="Resource" />
+                <Resource name="Asset" />
+                <Resource name="Config" />
+                <Resource name="WaldenUser" label="User" />
+                <Resource name="Widget" />
+                <Resource name="WidgetOnPage" />
+                <Resource name="Query" />
+                <Resource name="QueryEntityRef" />
             </Admin>
         );
-        /*
-        <Resource
-            name="Taxonomy"
-            list={TaxonomyList}
-            edit={TaxonomyEdit}
-            />
-        <Resource
-            name="Taxon"
-            list={TaxonList}
-            edit={TaxonEdit}/>
-        */
     }
 }
 

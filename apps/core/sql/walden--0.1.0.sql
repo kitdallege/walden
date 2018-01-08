@@ -16,6 +16,9 @@ CREATE TABLE config
     host_role   host_role       NOT NULL DEFAULT 'DEVELOPMENT',
     configs     JSONB           NOT NULL DEFAULT '{}'::JSONB
 );
+ALTER TABLE config OWNER to walden;
+SELECT pg_catalog.pg_extension_config_dump('config', '');
+
 
 CREATE TABLE walden_user
 (
@@ -30,6 +33,7 @@ CREATE TABLE walden_user
 ALTER TABLE walden_user OWNER to walden;
 COMMENT ON COLUMN walden_user.password IS 'Password uses [algo]$[salt]$[hexdigest].';
 COMMENT ON TABLE walden_user is 'User within the walden system.';
+SELECT pg_catalog.pg_extension_config_dump('walden_user', '');
 
 -- Create a history table in walden_history
 CREATE TABLE walden_history.walden_user (LIKE walden_user);
@@ -59,6 +63,16 @@ FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
  Non-leaf resources are able to generate more resources.
 
 */
+CREATE TABLE application
+(
+    id          SERIAL      NOT NULL PRIMARY KEY,
+    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    name        TEXT        NOT NULL UNIQUE
+    -- install_func, update_func, uninstall_func:
+    -- going to try to do these by convention. So if you define a
+    -- [application.name]_[install, update, uninstall] function(s)
+    -- we'll call um, otherwise, we'll do nothing.
+);
 CREATE TYPE entity_type AS ENUM
 (
     'TABLE',
@@ -70,6 +84,7 @@ CREATE TABLE entity
 (
     id          SERIAL      NOT NULL PRIMARY KEY,
     sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    application_id INTEGER REFERENCES application(id),
     type        entity_type NOT NULL DEFAULT 'TABLE',
     schema      TEXT        NOT NULL, -- application
     name        TEXT        NOT NULL,
@@ -106,7 +121,7 @@ COMMENT ON TABLE entity is 'An Entity within the walden system';
 
 
 */
-CREATE TYPE asset_type Enum
+CREATE TYPE asset_type AS ENUM
 (
     'CSS',
     'JS',
@@ -153,12 +168,39 @@ CREATE TABLE widget_on_page
 );
 ALTER TABLE widget_on_page OWNER to walden;
 
+CREATE TABLE db_query
+(
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    name        TEXT    NOT NULL UNIQUE,
+    statement   TEXT    NOT NULL,
+    params      JSONB   NOT NULL DEFAULT '{}'::JSONB
+);
+ALTER TABLE db_query OWNER to walden;
+
+CREATE TABLE query_entity_ref
+(
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    entity_id   INTEGER NOT NULL REFERENCES entity(id),
+    query_id    INTEGER NOT NULL REFERENCES db_query(id)
+);
+ALTER TABLE query_entity_ref OWNER to walden;
+
+CREATE TABLE widget_query
+(
+    id          SERIAL  NOT NULL PRIMARY KEY,
+    widget_id   INTEGER NOT NULL REFERENCES widget(id),
+    query_id    INTEGER NOT NULL REFERENCES db_query(id)
+);
+ALTER TABLE widget_query OWNER to walden;
+
 CREATE TYPE resource_type AS ENUM
 (
     'STATIC',
     'LIST',
     'DETAIL'
 );
+ALTER TYPE resource_type OWNER to walden;
+
 CREATE TABLE resource
 (
     id          SERIAL          NOT NULL PRIMARY KEY,
@@ -167,12 +209,15 @@ CREATE TABLE resource
     entity_id   INTEGER         NOT NULL REFERENCES entity(id),
     children    TEXT            NOT NULL DEFAULT ''
 );
+ALTER TABLE resource OWNER to walden;
 
 CREATE TABLE taxonomy
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
     name    TEXT    NOT NULL UNIQUE
 );
+ALTER TABLE taxonomy OWNER to walden;
+
 CREATE TABLE taxon
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
@@ -181,6 +226,8 @@ CREATE TABLE taxon
     resource_id INTEGER NOT NULL REFERENCES resource(id),
     page_id     INTEGER NOT NULL REFERENCES page(id)
 );
+ALTER TABLE taxon OWNER to walden;
+
 CREATE TABLE entity_taxon
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
@@ -188,6 +235,7 @@ CREATE TABLE entity_taxon
     taxon_id    INTEGER NOT NULL REFERENCES taxon(id),
     UNIQUE (entity_id, taxon_id)
 );
+ALTER TABLE entity_taxon OWNER to walden;
 -- Routes
 -- Queries
 -- View
@@ -199,6 +247,8 @@ CREATE TABLE entity_taxon
 /**************************************************************
  *                      DATA                                  *
  **************************************************************/
+INSERT INTO walden_user (username, first_name, last_name, email, password)
+    VALUES ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
 INSERT INTO entity (type, schema, name)
     VALUES ('TABLE', 'walden', 'walden_user');
 INSERT INTO resource (name, type, entity_id)
@@ -209,7 +259,10 @@ INSERT INTO page (name, title)
     VALUES ('home', 'my awesome homepage');
 INSERT INTO taxon (name, parent_path, resource_id, page_id)
     VALUES ('all users', 'root.users', 1, 1);
-
+INSERT INTO db_query (name, statement)
+    VALUES ('get_users_list', 'allWaldenUsers{ users:nodes{ id firstName lastName username } }');
+INSERT INTO query_entity_ref (entity_id, query_id)
+    VALUES (1, 1);
 
 /*
     Views make explicit the required columns from a given table. If the
