@@ -34,20 +34,24 @@ CREATE TABLE taxon
     page_id     INTEGER NOT NULL REFERENCES page(id)
 );
 ALTER TABLE taxon OWNER to walden;
-SELECT pg_catalog.pg_extension_config_dump('taxonomy', '');
+SELECT pg_catalog.pg_extension_config_dump('taxon', '');
+/*
+    Need trigger contraint on UPDATE to make sure the name isn't changed
+    once a taxon is published.
+*/
 
-CREATE TABLE entity_taxon
+CREATE TABLE taxon_resource
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
-    entity_id   INTEGER NOT NULL REFERENCES entity(id),
     taxon_id    INTEGER NOT NULL REFERENCES taxon(id),
+    resource_id INTEGER NOT NULL REFERENCES resource(id),
     UNIQUE (entity_id, taxon_id)
 );
-ALTER TABLE entity_taxon OWNER to walden;
-SELECT pg_catalog.pg_extension_config_dump('taxonomy', '');
+ALTER TABLE taxon_resource OWNER to walden;
+SELECT pg_catalog.pg_extension_config_dump('taxon_resource', '');
 
 
 INSERT INTO taxonomy (name)
     VALUES ('ComeToVegas');
 INSERT INTO taxon (name, parent_path, resource_id, page_id)
-    VALUES ('all users', 'root.users', 1, 1);
+    VALUES ('Home', 'root', 1, 1);

@@ -8,6 +8,9 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
+/**************************************************************
+ *                    Tables & Types                          *
+ **************************************************************/
 
 CREATE TYPE host_role AS ENUM ('DEVELOPMENT', 'ADMIN', 'PRODUCTION');
 CREATE TABLE config
@@ -42,25 +45,24 @@ CREATE TABLE walden_history.walden_user (LIKE walden_user);
 -- Add the trigger for versioning.
 CREATE TRIGGER walden_user_versioning_trigger
 BEFORE INSERT OR UPDATE OR DELETE ON walden_user
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
-                                          'walden_history.walden_user',
-                                          true);
+FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
 
 CREATE TABLE application
 (
     id          SERIAL      NOT NULL PRIMARY KEY,
     sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT        NOT NULL UNIQUE
+    name        TEXT        NOT NULL UNIQUE,
+    schema      TEXT        NOT NULL
     -- install_func, update_func, uninstall_func:
     -- going to try to do these by convention. So if you define a
     -- [application.name]_[install, update, uninstall] function(s)
     -- we'll call um, otherwise, we'll do nothing.
 );
-CREATE TYPE entity_type AS ENUM
-(
-    'TABLE',
-    'VIEW'
-);
+ALTER TABLE application OWNER to walden;
+COMMENT ON COLUMN application IS 'Applications within the Walden System.';
+--SELECT pg_catalog.pg_extension_config_dump('application', '');
+
+CREATE TYPE entity_type AS ENUM ('TABLE', 'VIEW');
 COMMENT ON TYPE entity_type is 'Types of Entity''s within the walden system';
 
 CREATE TABLE entity
@@ -69,20 +71,14 @@ CREATE TABLE entity
     sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
     application_id INTEGER REFERENCES application(id),
     type        entity_type NOT NULL DEFAULT 'TABLE',
-    schema      TEXT        NOT NULL, -- application
     name        TEXT        NOT NULL,
     UNIQUE (schema, name)
 );
 ALTER TABLE entity OWNER to walden;
 COMMENT ON TABLE entity is 'An Entity within the walden system';
 
-CREATE TYPE asset_type AS ENUM
-(
-    'CSS',
-    'JS',
-    'IMG',
-    'FILE'
-);
+CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
+
 CREATE TABLE asset
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
@@ -119,9 +115,7 @@ CREATE TABLE walden_history.page (LIKE page);
 -- Add the trigger for versioning.
 CREATE TRIGGER walden_user_versioning_trigger
 BEFORE INSERT OR UPDATE OR DELETE ON page
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
-                                          'walden_history.page',
-                                          true);
+FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.page', true);
 
 CREATE TABLE widget_on_page
 (
@@ -132,7 +126,7 @@ CREATE TABLE widget_on_page
 );
 ALTER TABLE widget_on_page OWNER to walden;
 
-CREATE TABLE db_query
+CREATE TABLE wquery
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
     name        TEXT    NOT NULL UNIQUE,
@@ -145,7 +139,7 @@ CREATE TABLE query_entity_ref
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
     entity_id   INTEGER NOT NULL REFERENCES entity(id),
-    query_id    INTEGER NOT NULL REFERENCES db_query(id)
+    query_id    INTEGER NOT NULL REFERENCES wquery(id)
 );
 ALTER TABLE query_entity_ref OWNER to walden;
 
@@ -153,7 +147,7 @@ CREATE TABLE widget_query
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
     widget_id   INTEGER NOT NULL REFERENCES widget(id),
-    query_id    INTEGER NOT NULL REFERENCES db_query(id)
+    query_id    INTEGER NOT NULL REFERENCES wquery(id)
 );
 ALTER TABLE widget_query OWNER to walden;
 
@@ -175,39 +169,54 @@ CREATE TABLE resource
 );
 ALTER TABLE resource OWNER to walden;
 
-/*
-CREATE TABLE taxonomy
-(
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE
-);
-ALTER TABLE taxonomy OWNER to walden;
-
-CREATE TABLE taxon
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    name        TEXT    NOT NULL,
-    parent_path LTREE   NOT NULL UNIQUE,
-    resource_id INTEGER NOT NULL REFERENCES resource(id),
-    page_id     INTEGER NOT NULL REFERENCES page(id)
-);
-ALTER TABLE taxon OWNER to walden;
-
-CREATE TABLE entity_taxon
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    entity_id   INTEGER NOT NULL REFERENCES entity(id),
-    taxon_id    INTEGER NOT NULL REFERENCES taxon(id),
-    UNIQUE (entity_id, taxon_id)
-);
-ALTER TABLE entity_taxon OWNER to walden;
-*/
 -- Routes
 -- Queries
 -- View
 -- Templates
 -- Assets
 --
+
+/**************************************************************
+ *                      Functions                             *
+ **************************************************************/
+ CREATE FUNCTION walden_register_application(name text)
+ RETURNS INTEGER AS $$
+     INSERT INTO application (name, schema) VALUES (name, current_schema);
+ $$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_register_application(name text, schema text)
+RETURNS INTEGER AS $$
+    INSERT INTO application (name, schema) VALUES (name, schema);
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_unregister_application(name text)
+RETURNS VOID AS $$
+    DELETE FROM application WHERE name = name;
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_unregister_application(name text, schema text)
+RETURNS VOID AS $$
+    DELETE FROM application WHERE name = name AND schema = schema;
+$$ LANGUAGE SQL;
+
+
+CREATE FUNCTION walden_add_history(e entity)
+RETURNS VOID AS $$
+    CREATE TABLE walden_history.walden_user (LIKE walden_user);
+    DELETE FROM application WHERE name = name AND schema = schema;
+$$ LANGUAGE SQL;
+COMMENT ON FUNCTION walden_add_history IS 
+    'Adds a mirror table in a [current_schema]_history and sets up triggers for tracking changes and storing them.';
+
+-- Create a history table in walden_history
+CREATE TABLE walden_history.walden_user (LIKE walden_user);
+
+-- Add the trigger for versioning.
+CREATE TRIGGER walden_user_versioning_trigger
+BEFORE INSERT OR UPDATE OR DELETE ON walden_user
+FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
+
+
 
 
 /**************************************************************
