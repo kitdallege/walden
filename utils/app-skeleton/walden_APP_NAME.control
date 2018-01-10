@@ -1,0 +1,7 @@
+# walden walden_$APP_NAME extension
+comment = 'Walden $APP_NAME extension.'
+default_version = '0.1.0'
+module_pathname = '$libdir/walden_$APP_NAME'
+requires = 'walden'
+relocatable = false
+schema = walden_$APP_NAME

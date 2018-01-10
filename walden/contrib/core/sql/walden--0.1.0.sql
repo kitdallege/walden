@@ -6,7 +6,12 @@
 -- walden_[install, uninstall]_tables functions that a user can use to
 -- create/destory the extensions tables/indexes/sequences etc..
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION walden" to load this file. \quit
+--\echo Use "CREATE EXTENSION walden" to load this file. \quit
+
+CREATE SCHEMA IF NOT EXISTS walden;
+CREATE SCHEMA IF NOT EXISTS walden_history;
+
+--SET LOCAL search_path TO walden;
 
 /**************************************************************
  *                    Tables & Types                          *
@@ -59,7 +64,7 @@ CREATE TABLE application
     -- we'll call um, otherwise, we'll do nothing.
 );
 ALTER TABLE application OWNER to walden;
-COMMENT ON COLUMN application IS 'Applications within the Walden System.';
+COMMENT ON TABLE application IS 'Applications within the Walden System.';
 --SELECT pg_catalog.pg_extension_config_dump('application', '');
 
 CREATE TYPE entity_type AS ENUM ('TABLE', 'VIEW');
@@ -67,12 +72,12 @@ COMMENT ON TYPE entity_type is 'Types of Entity''s within the walden system';
 
 CREATE TABLE entity
 (
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    application_id INTEGER REFERENCES application(id),
-    type        entity_type NOT NULL DEFAULT 'TABLE',
-    name        TEXT        NOT NULL,
-    UNIQUE (schema, name)
+    id              SERIAL      NOT NULL PRIMARY KEY,
+    sys_period      tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    application_id  INTEGER REFERENCES application(id),
+    type            entity_type NOT NULL DEFAULT 'TABLE',
+    name            TEXT        NOT NULL,
+    UNIQUE (application_id, name)
 );
 ALTER TABLE entity OWNER to walden;
 COMMENT ON TABLE entity is 'An Entity within the walden system';
@@ -133,7 +138,7 @@ CREATE TABLE wquery
     statement   TEXT    NOT NULL,
     params      JSONB   NOT NULL DEFAULT '{}'::JSONB
 );
-ALTER TABLE db_query OWNER to walden;
+ALTER TABLE wquery OWNER to walden;
 
 CREATE TABLE query_entity_ref
 (
@@ -181,12 +186,16 @@ ALTER TABLE resource OWNER to walden;
  **************************************************************/
  CREATE FUNCTION walden_register_application(name text)
  RETURNS INTEGER AS $$
-     INSERT INTO application (name, schema) VALUES (name, current_schema);
+     INSERT INTO application (name, schema)
+     VALUES (name, current_schema)
+     RETURNING id;
  $$ LANGUAGE SQL;
 
 CREATE FUNCTION walden_register_application(name text, schema text)
 RETURNS INTEGER AS $$
-    INSERT INTO application (name, schema) VALUES (name, schema);
+    INSERT INTO application (name, schema)
+    VALUES (name, schema)
+    RETURNING id;
 $$ LANGUAGE SQL;
 
 CREATE FUNCTION walden_unregister_application(name text)
@@ -205,16 +214,16 @@ RETURNS VOID AS $$
     CREATE TABLE walden_history.walden_user (LIKE walden_user);
     DELETE FROM application WHERE name = name AND schema = schema;
 $$ LANGUAGE SQL;
-COMMENT ON FUNCTION walden_add_history IS 
+COMMENT ON FUNCTION walden_add_history(e entity) IS
     'Adds a mirror table in a [current_schema]_history and sets up triggers for tracking changes and storing them.';
 
 -- Create a history table in walden_history
-CREATE TABLE walden_history.walden_user (LIKE walden_user);
-
--- Add the trigger for versioning.
-CREATE TRIGGER walden_user_versioning_trigger
-BEFORE INSERT OR UPDATE OR DELETE ON walden_user
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
+-- CREATE TABLE walden_history.walden_user (LIKE walden_user);
+--
+-- -- Add the trigger for versioning.
+-- CREATE TRIGGER walden_user_versioning_trigger
+-- BEFORE INSERT OR UPDATE OR DELETE ON walden_user
+-- FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
 
 
 
@@ -224,13 +233,14 @@ FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_u
  **************************************************************/
 INSERT INTO walden_user (username, first_name, last_name, email, password)
     VALUES ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
-INSERT INTO entity (type, schema, name)
-    VALUES ('TABLE', 'walden', 'walden_user');
+INSERT INTO application (name, schema) VALUES ('walden', 'walden');
+INSERT INTO entity (type, application_id, name)
+    VALUES ('TABLE', 1, 'walden_user');
 INSERT INTO resource (name, type, entity_id)
     VALUES ('user-list', 'LIST', 1);
 INSERT INTO page (name, title)
     VALUES ('home', 'my awesome homepage');
-INSERT INTO db_query (name, statement)
+INSERT INTO wquery (name, statement)
     VALUES ('get_users_list', 'allWaldenUsers{ users:nodes{ id firstName lastName username } }');
 INSERT INTO query_entity_ref (entity_id, query_id)
     VALUES (1, 1);

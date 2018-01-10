@@ -5,6 +5,10 @@
 */
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
+CREATE SCHEMA IF NOT EXISTS walden_taxonomy;
+
+--SET LOCAL search_path TO walden_taxonomy;
+
 CREATE TABLE taxonomy
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
@@ -45,7 +49,7 @@ CREATE TABLE taxon_resource
     id          SERIAL  NOT NULL PRIMARY KEY,
     taxon_id    INTEGER NOT NULL REFERENCES taxon(id),
     resource_id INTEGER NOT NULL REFERENCES resource(id),
-    UNIQUE (entity_id, taxon_id)
+    UNIQUE (taxon_id, resource_id)
 );
 ALTER TABLE taxon_resource OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('taxon_resource', '');

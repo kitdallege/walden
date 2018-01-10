@@ -3,4 +3,5 @@ comment = 'Taxonomy based website hierarchy for the Walden web system.'
 default_version = '0.1.0'
 module_pathname = '$libdir/walden_taxonomy'
 requires = 'walden'
-relocatable = true
+relocatable = false
+schema = walden_taxonomy
