@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import argparse, errno, os, glob, shutil, string
+import argparse, errno, os, glob, subprocess, shutil, string
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DEFAULT_SKELETON = os.path.join(os.path.dirname(BASE_DIR), 'utils/app-skeleton')
@@ -46,7 +46,32 @@ def main(appname, directory, template):
                     with open(inpath, 'w') as outfile:
                         outfile.write(data)
     print('Finished creating new {0!r} application..'.format(appname))
-    print('Happy hacking! =)')
+    print('Doing a test build.\n')
+    os.chdir(install_location)
+    has_error = False
+    try:
+        print('sudo make install')
+        print(subprocess.check_output(["sudo", "make", "install"]))
+        print("Build Succeeded")
+    except Exception as err:
+        print("Build Failed")
+        print(err)
+        has_error = True
+    finally:
+        try:
+            print("Removing.\n")
+            print('sudo make uninstall')
+            print(subprocess.check_output(["sudo", "make", "uninstall"]))
+            print("Removeal Succeeded")
+        except Exception as err2:
+            print("Removeal Failed")
+            print(err2)
+            has_error = True
+    if has_error:
+        print("Errors encountered during test build.")
+        print("Recommend removing generated code and trying again.")
+    else:
+        print('Happy hacking! =)')
     return None
 
 if __name__ == '__main__':
