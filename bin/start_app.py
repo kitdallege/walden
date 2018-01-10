@@ -24,19 +24,20 @@ def main(appname, directory, template):
         print("{0} exists.\nRemove and run again.".format(install_location))
         return None
     shutil.copytree(template, install_location)
+    print('Writing: ')
     for subdir, _, files in os.walk(install_location):
         for filename in files:
             outpath = inpath = os.path.join(subdir, filename)
             if 'APP_NAME' in inpath:
                 outpath = inpath.replace('APP_NAME', appname)
-                print(outpath)
+                print(' * {}'.format(outpath))
                 with open(inpath, 'r') as infile, open(outpath, 'w') as outfile:
                     data = string.Template(infile.read())\
                         .safe_substitute(dict(APP_NAME=appname))
                     outfile.write(data)
                 os.remove(inpath)
             else:
-                print(inpath)
+                print(' * {}'.format(inpath))
                 data = None
                 with open(inpath, 'r') as infile:
                     data = string.Template(infile.read())\
@@ -44,6 +45,8 @@ def main(appname, directory, template):
                 if data:
                     with open(inpath, 'w') as outfile:
                         outfile.write(data)
+    print('Finished creating new {0!r} application..'.format(appname))
+    print('Happy hacking! =)')
     return None
 
 if __name__ == '__main__':
