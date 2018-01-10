@@ -1,6 +1,6 @@
 # walden extension
 comment = 'A web system for postgresql'
-default_version = '0.1.0'
+default_version = '0.0.1'
 module_pathname = '$libdir/walden'
 requires = 'plpgsql, plpythonu, ltree, temporal_tables'
 relocatable = false

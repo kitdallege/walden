@@ -2,7 +2,7 @@
    "name": "walden_$APP_NAME",
    "abstract": "",
    "description": "",
-   "version": "0.1.0",
+   "version": "0.0.1",
    "maintainer": [
       "Kit C. Dallege <kit.dallege@gmail.com>"
    ],
@@ -11,16 +11,16 @@
         "runtime": {
             "requires": {
                 "PostgreSQL": ">= 9.6.0",
-                "walden": "0.1.0"
+                "walden": "0.0.1"
             }
         }
    },
    "provides": {
       "walden_$APP_NAME": {
          "abstract": "",
-         "file": "sql/walden_$APP_NAME--0.1.0.sql",
+         "file": "sql/walden_$APP_NAME--0.0.1.sql",
          "docfile": "doc/walden_$APP_NAME.md",
-         "version": "0.1.0"
+         "version": "0.0.1"
       }
    },
    "resources": {

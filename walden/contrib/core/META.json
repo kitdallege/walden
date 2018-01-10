@@ -2,7 +2,7 @@
    "name": "walden",
    "abstract": "A web development platform within PostgreSQL.",
    "description": "This library provides a core functionaliy for creating web sites/pages from within PostgreSQL.",
-   "version": "0.1.0",
+   "version": "0.0.1",
    "maintainer": [
       "Kit C. Dallege <kit.dallege@gmail.com>"
    ],
@@ -21,9 +21,9 @@
    "provides": {
       "walden": {
          "abstract": "A web development platform within PostgreSQL.",
-         "file": "sql/walden--0.1.0.sql",
+         "file": "sql/walden--0.0.1.sql",
          "docfile": "doc/walden.md",
-         "version": "0.1.0"
+         "version": "0.0.1"
       }
    },
    "resources": {

@@ -2,7 +2,7 @@
    "name": "walden_taxonomy",
    "abstract": "Provides taxonomy based urls/routing for the Walden platform.",
    "description": "Allows for a user defined taxonomy from which a website hierarchy is derived.",
-   "version": "0.1.0",
+   "version": "0.0.1",
    "maintainer": [
       "Kit C. Dallege <kit.dallege@gmail.com>"
    ],
@@ -11,16 +11,16 @@
         "runtime": {
             "requires": {
                 "PostgreSQL": ">= 9.6.0",
-                "walden": "0.1.0"
+                "walden": "0.0.1"
             }
         }
    },
    "provides": {
       "walden_taxonomy": {
          "abstract": "A web development platform within PostgreSQL.",
-         "file": "sql/walden_taxonomy--0.1.0.sql",
+         "file": "sql/walden_taxonomy--0.0.1.sql",
          "docfile": "doc/walden_taxonomy.md",
-         "version": "0.1.0"
+         "version": "0.0.1"
       }
    },
    "resources": {
