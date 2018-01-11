@@ -1,0 +1,7 @@
+# walden walden_pages extension
+comment = 'Walden pages extension.'
+default_version = '0.0.1'
+module_pathname = '$libdir/walden_pages'
+requires = 'walden'
+relocatable = false
+schema = walden

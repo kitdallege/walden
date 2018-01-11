@@ -28,7 +28,6 @@ CREATE TABLE config
 ALTER TABLE config OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('config', '');
 
-
 CREATE TABLE walden_user
 (
     id          SERIAL      NOT NULL PRIMARY KEY,
@@ -74,140 +73,47 @@ CREATE TABLE entity
 (
     id              SERIAL      NOT NULL PRIMARY KEY,
     sys_period      tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    application_id  INTEGER REFERENCES application(id),
+    application_id  INTEGER     NOT NULL REFERENCES application(id),
     type            entity_type NOT NULL DEFAULT 'TABLE',
     name            TEXT        NOT NULL,
+    db_object       TEXT        NOT NULL,
     UNIQUE (application_id, name)
 );
 ALTER TABLE entity OWNER to walden;
 COMMENT ON TABLE entity is 'An Entity within the walden system';
 
-CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
-
-CREATE TABLE asset
-(
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE,
-    type    asset_type NOT NULL DEFAULT 'FILE'
-);
-ALTER TABLE asset OWNER to walden;
-/* maybe a table per asset type using inheritance ?*/
-
-
-
-CREATE TABLE widget
-(
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE,
-    title   TEXT    NOT NULL
-    -- js_assets
-    -- css_assets
-    -- template
-    -- queries
-);
-ALTER TABLE widget OWNER to walden;
-
-CREATE TABLE page
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT    NOT NULL UNIQUE,
-    title       TEXT    NOT NULL
-);
-ALTER TABLE page OWNER to walden;
--- Create a history table in walden_history
-CREATE TABLE walden_history.page (LIKE page);
--- Add the trigger for versioning.
-CREATE TRIGGER walden_user_versioning_trigger
-BEFORE INSERT OR UPDATE OR DELETE ON page
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.page', true);
-
-CREATE TABLE widget_on_page
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    page_id     INTEGER NOT NULL REFERENCES page(id),
-    widget_id   INTEGER NOT NULL REFERENCES widget(id)
-
-);
-ALTER TABLE widget_on_page OWNER to walden;
-
-CREATE TABLE wquery
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
-    statement   TEXT    NOT NULL,
-    params      JSONB   NOT NULL DEFAULT '{}'::JSONB
-);
-ALTER TABLE wquery OWNER to walden;
-
-CREATE TABLE query_entity_ref
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    entity_id   INTEGER NOT NULL REFERENCES entity(id),
-    query_id    INTEGER NOT NULL REFERENCES wquery(id)
-);
-ALTER TABLE query_entity_ref OWNER to walden;
-
-CREATE TABLE widget_query
-(
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    widget_id   INTEGER NOT NULL REFERENCES widget(id),
-    query_id    INTEGER NOT NULL REFERENCES wquery(id)
-);
-ALTER TABLE widget_query OWNER to walden;
-
-CREATE TYPE resource_type AS ENUM
-(
-    'STATIC',
-    'LIST',
-    'DETAIL'
-);
-ALTER TYPE resource_type OWNER to walden;
-
-CREATE TABLE resource
-(
-    id          SERIAL          NOT NULL PRIMARY KEY,
-    name        TEXT            NOT NULL UNIQUE,
-    type        resource_type   NOT NULL,
-    entity_id   INTEGER         NOT NULL REFERENCES entity(id),
-    children    TEXT            NOT NULL DEFAULT ''
-);
-ALTER TABLE resource OWNER to walden;
-
--- Routes
--- Queries
--- View
--- Templates
--- Assets
---
 
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
- CREATE FUNCTION walden_register_application(name text)
- RETURNS INTEGER AS $$
-     INSERT INTO application (name, schema)
-     VALUES (name, current_schema)
-     RETURNING id;
- $$ LANGUAGE SQL;
-
-CREATE FUNCTION walden_register_application(name text, schema text)
+CREATE FUNCTION walden_register_application(name text, schema text DEFAULT current_schema)
 RETURNS INTEGER AS $$
     INSERT INTO application (name, schema)
     VALUES (name, schema)
     RETURNING id;
 $$ LANGUAGE SQL;
 
-CREATE FUNCTION walden_unregister_application(name text)
-RETURNS VOID AS $$
-    DELETE FROM application WHERE name = name;
-$$ LANGUAGE SQL;
-
-CREATE FUNCTION walden_unregister_application(name text, schema text)
+CREATE FUNCTION walden_unregister_application(name text, schema text DEFAULT current_schema)
 RETURNS VOID AS $$
     DELETE FROM application WHERE name = name AND schema = schema;
 $$ LANGUAGE SQL;
 
+CREATE FUNCTION walden_register_entity(app_name text, name text, db_object text)
+RETURNS INTEGER AS $$
+    INSERT INTO entity (application_id, type, name, db_object)
+    VALUES (
+        (SELECT id FROM application WHERE name = app_name),
+        'TABLE', name, db_object
+    )
+    RETURNING id;
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_unregister_entity(app_name text, name text)
+RETURNS VOID AS $$
+    DELETE FROM entity
+    WHERE name = name
+      AND application_id = (SELECT id FROM application WHERE name = app_name);
+$$ LANGUAGE SQL;
 
 CREATE FUNCTION walden_add_history(e entity)
 RETURNS VOID AS $$
@@ -243,19 +149,19 @@ $$ LANGUAGE SQL IMMUTABLE;
 /**************************************************************
  *                      DATA                                  *
  **************************************************************/
+ DO $$DECLARE
+ BEGIN
+    PERFORM walden_register_application('Walden');
+    PERFORM walden_register_entity('Walden', 'User', 'walden_user');
+ END$$;
+
+
 INSERT INTO walden_user (username, first_name, last_name, email, password)
     VALUES ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
-INSERT INTO application (name, schema) VALUES ('walden', 'walden');
-INSERT INTO entity (type, application_id, name)
-    VALUES ('TABLE', 1, 'walden_user');
-INSERT INTO resource (name, type, entity_id)
-    VALUES ('user-list', 'LIST', 1);
-INSERT INTO page (name, title)
-    VALUES ('home', 'my awesome homepage');
-INSERT INTO wquery (name, statement)
-    VALUES ('get_users_list', 'allWaldenUsers{ users:nodes{ id firstName lastName username } }');
-INSERT INTO query_entity_ref (entity_id, query_id)
-    VALUES (1, 1);
+-- INSERT INTO application (name, schema) VALUES ('Walden', 'walden');
+-- INSERT INTO entity (type, application_id, name, db_object)
+--     VALUES ('TABLE', 1, 'User', 'walden_user');
+
 
 /*
     Views make explicit the required columns from a given table. If the

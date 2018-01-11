@@ -1,6 +1,6 @@
 CREATE SCHEMA walden;
 CREATE SCHEMA walden_history;
-CREATE SCHEMA walden_taxonomy;
+-- CREATE SCHEMA walden_taxonomy;
 
 -- Walden
 GRANT ALL ON SCHEMA walden TO walden;
@@ -25,12 +25,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA walden_history
     GRANT USAGE ON TYPES TO walden;
 
 -- Taxonomy
-GRANT ALL ON SCHEMA walden_taxonomy TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
-    GRANT ALL ON TABLES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
-    GRANT USAGE ON SEQUENCES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
-    GRANT EXECUTE ON FUNCTIONS TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
-    GRANT USAGE ON TYPES TO walden;
+-- GRANT ALL ON SCHEMA walden_taxonomy TO walden;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
+--     GRANT ALL ON TABLES TO walden;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
+--     GRANT USAGE ON SEQUENCES TO walden;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
+--     GRANT EXECUTE ON FUNCTIONS TO walden;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA walden_taxonomy
+--     GRANT USAGE ON TYPES TO walden;

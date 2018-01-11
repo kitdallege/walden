@@ -5,9 +5,10 @@
 */
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
-CREATE SCHEMA IF NOT EXISTS walden_taxonomy;
+--- For now we'll stick contrib apps in with walden proper.
+CREATE SCHEMA IF NOT EXISTS walden;
+CREATE SCHEMA IF NOT EXISTS walden_history;
 
---SET LOCAL search_path TO walden_taxonomy;
 
 CREATE TABLE taxonomy
 (

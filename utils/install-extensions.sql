@@ -9,6 +9,10 @@ CREATE EXTENSION IF NOT EXISTS walden WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden IS
     'This extension provides a web development platform within PostgreSQL';
 
-CREATE EXTENSION IF NOT EXISTS walden_taxonomy WITH SCHEMA walden_taxonomy CASCADE;
+CREATE EXTENSION IF NOT EXISTS walden_taxonomy WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden_taxonomy IS
     'This extension provides a Taxonomy based resource tree for the Walden system';
+
+CREATE EXTENSION IF NOT EXISTS walden_pages WITH SCHEMA walden CASCADE;
+COMMENT ON EXTENSION walden_pages IS
+    'This extension provides a PageBuilder system for Walden';
