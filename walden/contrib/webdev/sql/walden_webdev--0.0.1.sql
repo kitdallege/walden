@@ -1,5 +1,5 @@
-/* Initial Install of walden_%(APP_NAME) */
-\echo Use "CREATE EXTENSION walden_pages" to load this file. \quit
+/* Initial Install of walden_webdev */
+\echo Use "CREATE EXTENSION walden_webdev" to load this file. \quit
 
 --- For now we'll stick contrib apps in with walden proper.
 CREATE SCHEMA IF NOT EXISTS walden;

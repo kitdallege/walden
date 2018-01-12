@@ -1,0 +1,7 @@
+# walden_webdev extension
+comment = 'Walden webdev extension.'
+default_version = '0.0.1'
+module_pathname = '$libdir/walden_webdev'
+requires = 'walden'
+relocatable = false
+schema = walden

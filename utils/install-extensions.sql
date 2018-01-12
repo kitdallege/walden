@@ -13,6 +13,6 @@ CREATE EXTENSION IF NOT EXISTS walden_taxonomy WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden_taxonomy IS
     'This extension provides a Taxonomy based resource tree for the Walden system';
 
-CREATE EXTENSION IF NOT EXISTS walden_pages WITH SCHEMA walden CASCADE;
-COMMENT ON EXTENSION walden_pages IS
-    'This extension provides a PageBuilder system for Walden';
+CREATE EXTENSION IF NOT EXISTS walden_webdev WITH SCHEMA walden CASCADE;
+COMMENT ON EXTENSION walden_webdev IS
+    'This extension provides Site/Page Builder tools for the Walden system.';

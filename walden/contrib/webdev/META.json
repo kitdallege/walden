@@ -1,5 +1,5 @@
 {
-   "name": "walden_pages",
+   "name": "walden_webdev",
    "abstract": "",
    "description": "",
    "version": "0.0.1",
@@ -16,10 +16,10 @@
         }
    },
    "provides": {
-      "walden_pages": {
+      "walden_webdev": {
          "abstract": "",
-         "file": "sql/walden_pages--0.0.1.sql",
-         "docfile": "doc/walden_pages.md",
+         "file": "sql/walden_webdev--0.0.1.sql",
+         "docfile": "doc/walden_webdev.md",
          "version": "0.0.1"
       }
    },

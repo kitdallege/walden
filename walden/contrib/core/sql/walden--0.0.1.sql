@@ -114,16 +114,27 @@ RETURNS INTEGER AS $$
     RETURNING id;
 $$ LANGUAGE SQL;
 
-CREATE FUNCTION walden_unregister_application(name text, schema text DEFAULT current_schema)
+CREATE FUNCTION walden_unregister_application(name text)
 RETURNS VOID AS $$
-    DELETE FROM application WHERE name = name AND schema = schema;
+    DELETE FROM application WHERE name = name;
 $$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_get_application(name text)
+RETURNS application AS $$
+    SELECT * FROM application WHERE name = name;
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION walden_get_application_id(name text)
+RETURNS INTEGER AS $$
+    SELECT id FROM walden_get_application(name);
+$$ LANGUAGE SQL;
+
 
 CREATE FUNCTION walden_register_entity(app_name text, name text, db_object text)
 RETURNS INTEGER AS $$
     INSERT INTO entity (application_id, type, name, db_object)
     VALUES (
-        (SELECT id FROM application WHERE name = app_name),
+        walden_get_application_id(app_name),
         'TABLE', name, db_object
     )
     RETURNING id;
@@ -133,27 +144,43 @@ CREATE FUNCTION walden_unregister_entity(app_name text, name text)
 RETURNS VOID AS $$
     DELETE FROM entity
     WHERE name = name
-      AND application_id = (SELECT id FROM application WHERE name = app_name);
+      AND application_id = walden_get_application_id(app_name);
 $$ LANGUAGE SQL;
 
 CREATE FUNCTION walden_register_ability(app_name text, name text, func_name_part text, description text)
 RETURNS INTEGER AS $$
     INSERT INTO ability (application_id, name, func_name_part, description)
     VALUES (
-        (SELECT id FROM application WHERE name = app_name),
+        walden_get_application(app_name).id,
         name, func_name_part, description
     )
     RETURNING id;
 $$ LANGUAGE SQL;
 
+//walden_update_ability()
+
 CREATE FUNCTION walden_unregister_ability(app_name text, name text)
 RETURNS VOID AS $$
     DELETE FROM ability
     WHERE name = name
-      AND application_id = (SELECT id FROM application WHERE name = app_name);
+      AND application_id = walden_get_application_id(app_name);
 $$ LANGUAGE SQL;
 
 
+CREATE FUNCTION walden_entity_add_ability(e entity, ability_app text, ability_name text)
+RETURNS VOID AS $$
+(
+    INSERT INTO entity_ability (entity_id, ability_id)
+        VALUES (
+            e.id,
+            (
+                SELECT id
+                FROM ability
+                WHERE name = ability_name
+                  AND application_id = walden_get_application_id(ability_app)
+            )
+        );
+) $$ LANGUAGE SQL;
 
 
 CREATE FUNCTION walden_add_history(e entity)
