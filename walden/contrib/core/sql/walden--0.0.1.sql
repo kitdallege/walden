@@ -92,15 +92,15 @@ RETURNS VOID AS $$
     DELETE FROM application WHERE name = name;
 $$ LANGUAGE SQL;
 
-CREATE FUNCTION walden_get_application(name text)
+CREATE FUNCTION walden_get_application(app_name text)
 RETURNS application AS $$
-    SELECT * FROM application WHERE name = name;
-$$ LANGUAGE SQL;
+    SELECT * FROM application WHERE name = app_name;
+$$ LANGUAGE SQL STABLE;
 
 CREATE FUNCTION walden_get_application_id(name text)
 RETURNS INTEGER AS $$
     SELECT id FROM walden_get_application(name);
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL STABLE;
 
 
 CREATE FUNCTION walden_register_entity(app_name text, name text, db_object text)
@@ -180,3 +180,11 @@ COMMENT ON FUNCTION walden_add_history(e entity) IS
             regexp_replace($1, E'[^\\w]', '-', 'g'), E'-+', '-', 'g'
         ) FROM 0 FOR 51)));
 $$ LANGUAGE SQL IMMUTABLE;
+
+
+
+
+DO $$
+BEGIN
+   PERFORM walden_register_application('Walden');
+END$$;

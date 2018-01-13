@@ -36,8 +36,8 @@ FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_u
 
 DO $$
 BEGIN
-   PERFORM walden_register_application('Walden');
-   PERFORM walden_register_entity('Walden', 'User', 'walden_user');
+   PERFORM walden_register_application('Auth');
+   PERFORM walden_register_entity('Auth', 'User', 'walden_user');
    INSERT INTO walden_user (username, first_name, last_name, email, password)
        VALUES ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
 END$$;

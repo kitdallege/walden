@@ -15,7 +15,7 @@ CREATE TABLE site
     name        TEXT        NOT NULL UNIQUE,
     domain      TEXT        NOT NULL UNIQUE
 );
-
+ALTER TABLE site OWNER to walden;
 
 DO $$
 BEGIN

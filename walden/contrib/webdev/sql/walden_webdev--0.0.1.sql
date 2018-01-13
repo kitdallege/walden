@@ -108,6 +108,7 @@ DO $$
 BEGIN
    PERFORM walden_register_application('Webdev');
    PERFORM walden_register_entity('Webdev', 'Asset',    'asset');
+   PERFORM walden_register_entity('Webdev', 'Page',     'page');
    PERFORM walden_register_entity('Webdev', 'Resource', 'resource');
    PERFORM walden_register_entity('Webdev', 'Widget',   'widget');
    PERFORM walden_register_entity('Webdev', 'Query',    'wquery');
