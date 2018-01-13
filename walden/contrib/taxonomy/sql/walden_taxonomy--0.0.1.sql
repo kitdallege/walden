@@ -56,7 +56,9 @@ ALTER TABLE taxon_resource OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('taxon_resource', '');
 
 
-INSERT INTO taxonomy (name)
-    VALUES ('ComeToVegas');
-INSERT INTO taxon (name, parent_path, resource_id, page_id)
-    VALUES ('Home', 'root', 1, 1);
+DO $$
+BEGIN
+   PERFORM walden_register_application('Taxonomy');
+   PERFORM walden_register_entity('Taxonomy', 'Taxonomy',   'taxonomy');
+   PERFORM walden_register_entity('Taxonomy', 'Taxon',      'taxon');
+END$$;

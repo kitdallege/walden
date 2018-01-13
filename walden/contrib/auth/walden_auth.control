@@ -1,0 +1,7 @@
+# walden_auth extension
+comment = 'Walden auth extension.'
+default_version = '0.0.1'
+module_pathname = '$libdir/walden_auth'
+requires = 'walden'
+relocatable = false
+schema = walden

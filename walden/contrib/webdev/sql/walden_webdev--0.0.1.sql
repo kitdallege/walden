@@ -103,11 +103,12 @@ ALTER TABLE resource OWNER to walden;
 -- Templates
 -- Assets
 --
-INSERT INTO resource (name, type, entity_id)
-    VALUES ('user-list', 'LIST', 1);
-INSERT INTO page (name, title)
-    VALUES ('home', 'my awesome homepage');
-INSERT INTO wquery (name, statement)
-    VALUES ('get_users_list', 'allWaldenUsers{ users:nodes{ id firstName lastName username } }');
-INSERT INTO query_entity_ref (entity_id, query_id)
-    VALUES (1, 1);
+
+DO $$
+BEGIN
+   PERFORM walden_register_application('Webdev');
+   PERFORM walden_register_entity('Webdev', 'Asset',    'asset');
+   PERFORM walden_register_entity('Webdev', 'Resource', 'resource');
+   PERFORM walden_register_entity('Webdev', 'Widget',   'widget');
+   PERFORM walden_register_entity('Webdev', 'Query',    'wquery');
+END$$;

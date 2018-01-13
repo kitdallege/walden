@@ -1,13 +1,5 @@
--- TODO: At some point break the tables out into a function or series of
--- functions. The main problem with having them within the extension is
--- mostly pg_dump not being able to dump the contents. Also if someone
--- where to Drop Extension they'd whipe out all the tables. Whilst that
--- maybe be desired, it shouldn't be default. So instead lets try to make
--- walden_[install, uninstall]_tables functions that a user can use to
--- create/destory the extensions tables/indexes/sequences etc..
-
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
---\echo Use "CREATE EXTENSION walden" to load this file. \quit
+/* Initial Install of walden */
+\echo Use "CREATE EXTENSION walden" to load this file. \quit
 
 /**************************************************************
  *                      Schemas                               *
@@ -29,25 +21,6 @@ CREATE TABLE config
 );
 ALTER TABLE config OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('config', '');
---
-CREATE TABLE walden_user
-(
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    username    TEXT        NOT NULL UNIQUE,
-    first_name  TEXT        NOT NULL,
-    last_name   TEXT        NOT NULL,
-    email       TEXT        NOT NULL,
-    password    TEXT        NOT NULL
-);
-ALTER TABLE walden_user OWNER to walden;
-COMMENT ON COLUMN walden_user.password IS 'Password uses [algo]$[salt]$[hexdigest].';
-COMMENT ON TABLE walden_user is 'User within the walden system.';
-SELECT pg_catalog.pg_extension_config_dump('walden_user', '');
-CREATE TABLE walden_history.walden_user (LIKE walden_user);
-CREATE TRIGGER walden_user_versioning_trigger
-BEFORE INSERT OR UPDATE OR DELETE ON walden_user
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
 --
 CREATE TABLE application
 (
@@ -151,13 +124,13 @@ CREATE FUNCTION walden_register_ability(app_name text, name text, func_name_part
 RETURNS INTEGER AS $$
     INSERT INTO ability (application_id, name, func_name_part, description)
     VALUES (
-        walden_get_application(app_name).id,
+        walden_get_application_id(app_name),
         name, func_name_part, description
     )
     RETURNING id;
 $$ LANGUAGE SQL;
 
-//walden_update_ability()
+/* walden_update_ability() */
 
 CREATE FUNCTION walden_unregister_ability(app_name text, name text)
 RETURNS VOID AS $$
@@ -169,7 +142,6 @@ $$ LANGUAGE SQL;
 
 CREATE FUNCTION walden_entity_add_ability(e entity, ability_app text, ability_name text)
 RETURNS VOID AS $$
-(
     INSERT INTO entity_ability (entity_id, ability_id)
         VALUES (
             e.id,
@@ -180,7 +152,7 @@ RETURNS VOID AS $$
                   AND application_id = walden_get_application_id(ability_app)
             )
         );
-) $$ LANGUAGE SQL;
+$$ LANGUAGE SQL;
 
 
 CREATE FUNCTION walden_add_history(e entity)
@@ -208,48 +180,3 @@ COMMENT ON FUNCTION walden_add_history(e entity) IS
             regexp_replace($1, E'[^\\w]', '-', 'g'), E'-+', '-', 'g'
         ) FROM 0 FOR 51)));
 $$ LANGUAGE SQL IMMUTABLE;
-
-
-/**************************************************************
- *                      DATA                                  *
- **************************************************************/
- DO $$
- BEGIN
-    PERFORM walden_register_application('Walden');
-    PERFORM walden_register_entity('Walden', 'User', 'walden_user');
-    INSERT INTO walden_user (username, first_name, last_name, email, password)
-        VALUES ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
- END$$;
-
-/*
-    Views make explicit the required columns from a given table. If the
-    underlying table is altered to break a requierment and error is raised.
-
-    So if I shove query complexity though views, I gain the ability to provide
-    static type checking.
-
-    Functions are the dynamic component. The only checking they recieve is on
-    creation and their input/output types. Otherwise , as long as your not
-    removing a type which a function takes/returns, they could care less how
-    you change the schema. This means if a function selects from a
-    table, and that table alters their schema then there is a chance a
-    run-time error has been introduced.
-
-    * Test functions which take and/or return Entities.
-
-    So tabels are models.
-    Functions which take a table are model methods.
-
-    Intefaces & Abilities.
-    The 'register function' + registery pattern is very useful for augmenting an 'entity' with an 'ability'.
-    For more complex 'abilities' types can be used to simulate interfaces.
-    create a type which describes your interface.
-    create model methods to implement the type.
-    then just create a registry with a register function
-    that allows ya to hook (table, inteface_methods...).
-
-    At some point split models.sql into /models/[specific-files].sql
-    Sort of the typical django(ish) web app layout, just with a lot of sql.
-        * maybe a tool @ some point that runs off an app.yaml
-          to do schema migrations and like auto register stuff.
-*/

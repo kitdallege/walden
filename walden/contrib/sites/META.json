@@ -1,0 +1,45 @@
+{
+   "name": "walden_sites",
+   "abstract": "",
+   "description": "",
+   "version": "0.0.1",
+   "maintainer": [
+      "Kit C. Dallege <kit.dallege@gmail.com>"
+   ],
+   "license": "postgresql",
+   "prereqs": {
+        "runtime": {
+            "requires": {
+                "PostgreSQL": ">= 9.6.0",
+                "walden": "0.0.1"
+            }
+        }
+   },
+   "provides": {
+      "walden_sites": {
+         "abstract": "",
+         "file": "sql/walden_sites--0.0.1.sql",
+         "docfile": "doc/walden_sites.md",
+         "version": "0.0.1"
+      }
+   },
+   "resources": {
+      "bugtracker": {
+         "web": "http://github.com/kitdallege/walden/issues/"
+      },
+      "repository": {
+        "url":  "git://github.com/kitdallege/walden.git",
+        "web":  "http://github.com/kitdallege/walden/",
+        "type": "git"
+      }
+   },
+   "generated_by": "Kit C. Dallege",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "http://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "web development",
+      "taxonomy based urls"
+   ]
+}

@@ -1,0 +1,7 @@
+# walden walden_sites extension
+comment = 'Walden sites extension.'
+default_version = '0.0.1'
+module_pathname = '$libdir/walden_sites'
+requires = 'walden'
+relocatable = false
+schema = walden
