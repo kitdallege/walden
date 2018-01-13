@@ -85,12 +85,12 @@ RETURNS INTEGER AS $$
     INSERT INTO application (name, schema)
     VALUES (name, schema)
     RETURNING id;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 CREATE FUNCTION walden_unregister_application(name text)
 RETURNS VOID AS $$
     DELETE FROM application WHERE name = name;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 CREATE FUNCTION walden_get_application(app_name text)
 RETURNS application AS $$
@@ -111,14 +111,14 @@ RETURNS INTEGER AS $$
         'TABLE', name, db_object
     )
     RETURNING id;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 CREATE FUNCTION walden_unregister_entity(app_name text, name text)
 RETURNS VOID AS $$
     DELETE FROM entity
     WHERE name = name
       AND application_id = walden_get_application_id(app_name);
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 CREATE FUNCTION walden_register_ability(app_name text, name text, func_name_part text, description text)
 RETURNS INTEGER AS $$
@@ -128,7 +128,7 @@ RETURNS INTEGER AS $$
         name, func_name_part, description
     )
     RETURNING id;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 /* walden_update_ability() */
 
@@ -137,7 +137,7 @@ RETURNS VOID AS $$
     DELETE FROM ability
     WHERE name = name
       AND application_id = walden_get_application_id(app_name);
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 
 CREATE FUNCTION walden_entity_add_ability(e entity, ability_app text, ability_name text)
@@ -152,7 +152,7 @@ RETURNS VOID AS $$
                   AND application_id = walden_get_application_id(ability_app)
             )
         );
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL VOLATILE;
 
 
 CREATE FUNCTION walden_add_history(e entity)
@@ -164,7 +164,7 @@ BEGIN
     -- BEFORE INSERT OR UPDATE OR DELETE ON walden_user
     -- FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
 END
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPGSQL VOLATILE;
 COMMENT ON FUNCTION walden_add_history(e entity) IS
     'Adds a mirror table in a [current_schema]_history and sets up triggers for tracking changes and storing them.';
 

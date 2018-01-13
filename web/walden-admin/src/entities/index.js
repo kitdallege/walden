@@ -17,7 +17,7 @@ export const EntityList = (props) => (
     <List {...props} title="Entity's">
         <Datagrid>
             <TextField source="rowId" label="Id"/>
-            <TextField source="schema" label="Application"/>
+            <TextField source="applicationByApplicationId.name" label="Application"/>
             <TextField source="name" label="Entity"/>
             <EditButton/>
         </Datagrid>
@@ -28,7 +28,9 @@ export const EntityShow = (props) => (
     <Show {...props}>
         <SimpleShowLayout>
             <TextInput source="rowId" label="Id"/>
-            <TextField source="name" />
+            <TextInput source="type" />
+            <TextInput source="name" />
+            <TextInput source="dbObject" label="DB Selectable" />
         </SimpleShowLayout>
     </Show>
 );
@@ -38,8 +40,9 @@ export const EntityShow = (props) => (
 export const EntityCreate = (props) => (
     <Create {...props}>
         <SimpleForm>
-            <TextInput source="schema" />
+            <TextInput source="type" />
             <TextInput source="name" />
+            <TextInput source="dbObject" label="DB Selectable" />
         </SimpleForm>
     </Create>
 );
@@ -48,8 +51,9 @@ export const EntityEdit = (props) => (
     <Edit {...props}>
         <SimpleForm>
             <DisabledInput label="Id" source="id" />
-            <TextInput source="schema" />
+            <TextInput source="type" />
             <TextInput source="name" />
+            <TextInput source="dbObject" label="DB Selectable"/>
         </SimpleForm>
     </Edit>
 );

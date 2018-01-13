@@ -10,6 +10,7 @@
     "react": "^15.4.0",
     "react-admin": "^2.0.0-beta1",
     "react-dom": "^15.4.0",
+    "react-jsonschema-form": "^1.0.0",
     "react-scripts": "1.0.17"
   },
   "scripts": {

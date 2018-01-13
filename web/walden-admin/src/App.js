@@ -20,6 +20,7 @@ import {
     , TaxonEdit
 } from './taxonomy';
 import { introspectionOptions, buildQueryFactory} from './client';
+import customRoutes from './customRoutes';
 const theme = createMuiTheme({palette: {type: 'dark'}});
 
 class App extends Component {
@@ -44,7 +45,8 @@ class App extends Component {
             <Admin
                 dataProvider={dataProvider}
                 title="Walden Admin"
-                theme={theme}>
+                theme={theme}
+                customRoutes={customRoutes}>
                 <Resource
                     name="Entity"
                     icon={BuildIcon}
@@ -67,6 +69,7 @@ class App extends Component {
                     edit={TaxonEdit} />
                 <Resource name="Page" />
                 <Resource name="Resource" />
+                <Resource name="Application" />
                 <Resource name="Asset" />
                 <Resource name="Config" />
                 <Resource name="WaldenUser" label="User" />
