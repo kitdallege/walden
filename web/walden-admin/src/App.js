@@ -21,7 +21,13 @@ import {
 } from './taxonomy';
 import { introspectionOptions, buildQueryFactory} from './client';
 import customRoutes from './customRoutes';
+import { introspectionQuery } from 'graphql';
+import gql from 'graphql-tag';
 const theme = createMuiTheme({palette: {type: 'dark'}});
+
+class MyResource extends Resource {
+
+};
 
 class App extends Component {
     constructor() {
@@ -33,7 +39,15 @@ class App extends Component {
             introspection: introspectionOptions,
             client:{uri:'http://0.0.0.0:5000/graphql'},
             buildQuery: buildQueryFactory,
-            // resolveIntrospection: function () {debugger}
+            _resolveIntrospection: async function (client, options) {
+                debugger
+                const schema = options.schema
+                    ? options.schema
+                    : await client
+                          .query({ query: gql`${introspectionQuery}` })
+                          .then(({ data: { __schema } }) => __schema);
+                debugger
+            }
         }).then(dataProvider => this.setState({dataProvider}));
     }
     render() {
@@ -41,13 +55,15 @@ class App extends Component {
         if (!dataProvider) {
             return <div>Loading</div>;
         }
+        // TODO: introspect
+        debugger
         return (
             <Admin
                 dataProvider={dataProvider}
                 title="Walden Admin"
                 theme={theme}
                 customRoutes={customRoutes}>
-                <Resource
+                <MyResource
                     name="Entity"
                     icon={BuildIcon}
                     create={EntityCreate}

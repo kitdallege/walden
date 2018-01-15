@@ -7,6 +7,7 @@
 CREATE SCHEMA IF NOT EXISTS walden;
 CREATE SCHEMA IF NOT EXISTS walden_history;
 
+
 /**************************************************************
  *                    Tables & Types                          *
  **************************************************************/
@@ -20,7 +21,9 @@ CREATE TABLE entity_form
     is_default  BOOLEAN     NOT NULL DEFAULT FALSE
 );
 
-
+/**************************************************************
+ *                      Functions                             *
+ **************************************************************/
 CREATE FUNCTION admin_create_default_form(e entity)
 RETURNS VOID AS $$
     import json
@@ -31,6 +34,9 @@ RETURNS VOID AS $$
     #    VALUES (e.id, "", "", TRUE);
 $$ LANGUAGE plpythonu VOLATILE;
 
+/**************************************************************
+ *                      App Config                            *
+ **************************************************************/
 DO $$
 BEGIN
    PERFORM walden_register_application('Admin');

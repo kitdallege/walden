@@ -220,6 +220,6 @@ export const queryBuilder = introspectionResults => (aorFetchType, resourceName,
 
 
 export const buildQueryFactory = function (introspectionResults, otherOptions) {
-    // debugger
+    debugger
     return queryBuilder(introspectionResults)
 }

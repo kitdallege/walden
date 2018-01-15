@@ -183,7 +183,9 @@ $$ LANGUAGE SQL IMMUTABLE;
 
 
 
-
+/**************************************************************
+ *                      App Config                            *
+ **************************************************************/
 DO $$
 BEGIN
    PERFORM walden_register_application('Walden');

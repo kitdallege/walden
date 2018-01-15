@@ -1,12 +1,17 @@
 /* Initial Install of walden_webdev */
 \echo Use "CREATE EXTENSION walden_webdev" to load this file. \quit
 
---- For now we'll stick contrib apps in with walden proper.
+/**************************************************************
+ *                      Schemas                               *
+ **************************************************************/
 CREATE SCHEMA IF NOT EXISTS walden;
 CREATE SCHEMA IF NOT EXISTS walden_history;
 
-CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
 
+/**************************************************************
+ *                    Tables & Types                          *
+ **************************************************************/
+CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
 CREATE TABLE asset
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
@@ -102,8 +107,14 @@ ALTER TABLE resource OWNER to walden;
 -- View
 -- Templates
 -- Assets
---
+/**************************************************************
+ *                      Functions                             *
+ **************************************************************/
 
+
+/**************************************************************
+ *                      App Config                            *
+ **************************************************************/
 DO $$
 BEGIN
    PERFORM walden_register_application('Webdev');

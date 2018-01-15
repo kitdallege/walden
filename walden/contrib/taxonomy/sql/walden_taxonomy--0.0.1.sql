@@ -1,18 +1,20 @@
-/*
-    A Taxonomy is a 'tree of increasing classification specifity'. This
-    tree also happens to be how the various pages on the site are mapped to
-    their url homes.
-*/
+/* Initial Install of walden_taxonoy */
 \echo Use "CREATE EXTENSION walden" to load this file. \quit
 
---- For now we'll stick contrib apps in with walden proper.
+/**************************************************************
+ *                      Schemas                               *
+ **************************************************************/
 CREATE SCHEMA IF NOT EXISTS walden;
 CREATE SCHEMA IF NOT EXISTS walden_history;
 
 
+/**************************************************************
+ *                    Tables & Types                          *
+ **************************************************************/
 CREATE TABLE taxonomy
 (
     id      SERIAL  NOT NULL PRIMARY KEY,
+    site_id INTEGER NOT NULL REFERENCES site(id) UNIQUE,
     name    TEXT    NOT NULL UNIQUE
 );
 ALTER TABLE taxonomy OWNER to walden;
@@ -55,7 +57,14 @@ CREATE TABLE taxon_resource
 ALTER TABLE taxon_resource OWNER to walden;
 SELECT pg_catalog.pg_extension_config_dump('taxon_resource', '');
 
+/**************************************************************
+ *                      Functions                             *
+ **************************************************************/
 
+
+/**************************************************************
+ *                      App Config                            *
+ **************************************************************/
 DO $$
 BEGIN
    PERFORM walden_register_application('Taxonomy');

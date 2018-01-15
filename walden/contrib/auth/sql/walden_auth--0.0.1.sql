@@ -11,7 +11,6 @@ CREATE SCHEMA IF NOT EXISTS walden_history;
 /**************************************************************
  *                    Tables & Types                          *
  **************************************************************/
-
 CREATE TABLE walden_user
 (
     id          SERIAL      NOT NULL PRIMARY KEY,
@@ -32,8 +31,14 @@ BEFORE INSERT OR UPDATE OR DELETE ON walden_user
 FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.walden_user', true);
 
 
+/**************************************************************
+ *                      Functions                             *
+ **************************************************************/
 
 
+/**************************************************************
+ *                      App Config                            *
+ **************************************************************/
 DO $$
 BEGIN
    PERFORM walden_register_application('Auth');
