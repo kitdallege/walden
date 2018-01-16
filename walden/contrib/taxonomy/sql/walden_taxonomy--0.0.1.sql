@@ -30,11 +30,10 @@ FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period',
                                           'walden_history.walden_user',
                                           true);
 */
-
-
 CREATE TABLE taxon
 (
     id          SERIAL  NOT NULL PRIMARY KEY,
+    taxonomy_id INTEGER NOT NULL REFERENCES taxonomy(id),
     name        TEXT    NOT NULL,
     parent_path LTREE   NOT NULL UNIQUE,
     resource_id INTEGER NOT NULL REFERENCES resource(id),

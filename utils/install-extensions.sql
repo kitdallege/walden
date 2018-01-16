@@ -13,9 +13,6 @@ CREATE EXTENSION IF NOT EXISTS walden_auth WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden_auth IS
     'This extension provides Auth/Permissions for the Walden system.';
 
-CREATE EXTENSION IF NOT EXISTS walden_taxonomy WITH SCHEMA walden CASCADE;
-COMMENT ON EXTENSION walden_taxonomy IS
-    'This extension provides a Taxonomy based resource tree for the Walden system';
 
 CREATE EXTENSION IF NOT EXISTS walden_sites WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden_sites IS
@@ -24,3 +21,11 @@ COMMENT ON EXTENSION walden_sites IS
 CREATE EXTENSION IF NOT EXISTS walden_webdev WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden_webdev IS
     'This extension provides Site/Page Builder tools for the Walden system.';
+
+CREATE EXTENSION IF NOT EXISTS walden_taxonomy WITH SCHEMA walden CASCADE;
+COMMENT ON EXTENSION walden_taxonomy IS
+    'This extension provides a Taxonomy based resource tree for the Walden system';
+
+CREATE EXTENSION IF NOT EXISTS walden_admin WITH SCHEMA walden CASCADE;
+COMMENT ON EXTENSION walden_admin IS
+    'This extension provides Admin UI for the Walden system.';

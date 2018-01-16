@@ -1,5 +1,5 @@
 /* Initial Install of walden_sites */
-\echo Use "CREATE EXTENSION walden_sites" to load this file. \quit
+--\echo Use "CREATE EXTENSION walden_sites" to load this file. \quit
 
 /**************************************************************
  *                      Schemas                               *
@@ -17,7 +17,7 @@ CREATE TABLE organization
     sys_period  TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
     name        TEXT        NOT NULL UNIQUE
 );
-ALTER TABLE site OWNER to walden;
+ALTER TABLE organization OWNER to walden;
 
 CREATE TABLE site
 (
@@ -35,21 +35,24 @@ CREATE TABLE site_setting
     sys_period      TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
     site_id         INTEGER     NOT NULL REFERENCES site(id),
     name            TEXT        NOT NULL,
-    value           TEXT        NOT NULL
+    value           TEXT        NOT NULL,
     UNIQUE (site_id, name)
 );
+ALTER TABLE site_setting OWNER to walden;
 
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
-CREATE FUNCTION walden_create_site(org_name text, site_name text, domain text)
+CREATE FUNCTION walden_create_organization(org_name text)
+RETURNS INTEGER AS $$
+    INSERT INTO organization (name) VALUES (org_name) RETURNING id;
+$$ LANGUAGE SQL VOLATILE;
+
+CREATE FUNCTION walden_create_site(org_id integer, site_name text, domain text)
 RETURNS INTEGER AS $$
     INSERT INTO site (organization_id, name, domain)
-    VALUES (
-        (SELECT id FROM organization WHERE name = org_name),
-        site_name,
-        domain
-    ) RETURNING id;
+    VALUES (org_id, site_name, domain)
+    RETURNING id;
 $$ LANGUAGE SQL VOLATILE;
 
 

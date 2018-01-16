@@ -37,10 +37,10 @@ ALTER TABLE widget OWNER to walden;
 
 CREATE TABLE page
 (
-    id          SERIAL  NOT NULL PRIMARY KEY,
+    id          SERIAL      NOT NULL PRIMARY KEY,
     sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT    NOT NULL UNIQUE,
-    title       TEXT    NOT NULL
+    name        TEXT        NOT NULL UNIQUE,
+    title       TEXT        NOT NULL
 );
 ALTER TABLE page OWNER to walden;
 -- Create a history table in walden_history
@@ -102,6 +102,15 @@ CREATE TABLE resource
 );
 ALTER TABLE resource OWNER to walden;
 
+
+CREATE TABLE static_page
+(
+    id          SERIAL      NOT NULL PRIMARY KEY,
+    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    name        TEXT        NOT NULL UNIQUE,
+    title       TEXT        NOT NULL,
+    content     TEXT        NOT NULL
+)
 -- Routes
 -- Queries
 -- View
