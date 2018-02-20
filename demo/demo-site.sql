@@ -6,6 +6,17 @@ SET search_path TO walden;
 
 DO $$
 DECLARE
+BEGIN
+    -- hook ell places app
+    PERFORM walden_register_application('Place', 'public');
+    PERFORM walden_register_entity('Place', 'Place', 'places');
+    -- we'll use a view to expose it to the graphql api.
+    CREATE VIEW place AS SELECT * from "public"."places";
+
+END$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
     entity_id   entity.id%TYPE := 1;
     org_id      organization.id%TYPE;
     site_id     site.id%TYPE;

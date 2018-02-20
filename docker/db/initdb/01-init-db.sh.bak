@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+dropdb --username "$POSTGRES_USER" -e --if-exists walden 
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+    CREATE USER walden WITH PASSWORD 'walden';
+    CREATE DATABASE walden OWNER walden;
+    GRANT ALL PRIVILEGES ON DATABASE walden TO walden;
+EOSQL
+
+#createdb --username "$POSTGRES_USER" -e walden -O walden
+

@@ -12,11 +12,13 @@ CREATE SCHEMA IF NOT EXISTS walden_history;
  *                    Tables & Types                          *
  **************************************************************/
 CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
+ALTER TYPE asset_type OWNER to walden;
+
 CREATE TABLE asset
 (
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE,
-    type    asset_type NOT NULL DEFAULT 'FILE'
+    id      SERIAL      NOT NULL PRIMARY KEY,
+    name    TEXT        NOT NULL UNIQUE,
+    type    asset_type  NOT NULL DEFAULT 'FILE'
 );
 ALTER TABLE asset OWNER to walden;
 /* maybe a table per asset type using inheritance ?*/
@@ -110,7 +112,8 @@ CREATE TABLE static_page
     name        TEXT        NOT NULL UNIQUE,
     title       TEXT        NOT NULL,
     content     TEXT        NOT NULL
-)
+);
+ALTER TABLE static_page OWNER to walden;
 -- Routes
 -- Queries
 -- View

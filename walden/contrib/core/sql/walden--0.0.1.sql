@@ -12,6 +12,8 @@ CREATE SCHEMA IF NOT EXISTS walden_history;
  *                    Tables & Types                          *
  **************************************************************/
 CREATE TYPE host_role AS ENUM ('DEVELOPMENT', 'ADMIN', 'PRODUCTION');
+ALTER TYPE host_role OWNER to walden;
+
 CREATE TABLE config
 (
     id          SERIAL          NOT NULL PRIMARY KEY,
@@ -39,6 +41,8 @@ COMMENT ON TABLE application IS 'Applications within the Walden System.';
 
 CREATE TYPE entity_type AS ENUM ('TABLE', 'VIEW');
 COMMENT ON TYPE entity_type is 'Types of Entity''s within the walden system';
+ALTER TYPE entity_type OWNER to walden;
+
 CREATE TABLE entity
 (
     id              SERIAL      NOT NULL PRIMARY KEY,

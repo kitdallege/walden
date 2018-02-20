@@ -1,0 +1,32 @@
+version: '3.1'
+services:
+    db:
+        hostname: walden_db
+        build: ./db
+        image: walden-db 
+        environment:
+            - POSTGRES_PASSWORD=pgpass
+        ports:
+            - "5433:5432"
+        volumes:
+            - ./db/initdb:/walden-entrypoint-initdb.d
+            - /srv/code/walden/walden:/walden
+#            - web-root:/var/html
+#    frontend:
+#        hostname: walden_frontend
+#        image: nginx:mainline-alpine
+#        expose:
+#            - 80
+#        environment:
+#            - NGINX_HOST=cometo.vegas
+#            - NGINX_PORT=80
+#        volumes:
+#            - web-root:/usr/share/nginx/html
+#volumes:
+#    web-root:
+#
+#networks:
+#    default:
+#        external:
+#            name: nginx-proxy
+#

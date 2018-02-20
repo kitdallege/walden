@@ -4,4 +4,4 @@ default_version = '0.0.1'
 module_pathname = '$libdir/walden_admin'
 requires = 'walden'
 relocatable = false
-schema = walden_admin
+schema = walden
