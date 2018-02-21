@@ -7,7 +7,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 	apt-get -y install libpq-dev postgresql-server-dev-9.6 && \
 	apt-get -y install python2.7 postgresql-plpython-9.6 && \
 	apt-get -y install python3   postgresql-plpython3-9.6 && \
-	apt-get -y install git sudo && \
+	apt-get -y install git sudo vim && \
 	apt-get clean && \
 	rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
 	mkdir /walden-entrypoint-initdb.d

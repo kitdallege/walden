@@ -11,7 +11,11 @@ services:
         volumes:
             - ./db/initdb:/walden-entrypoint-initdb.d
             - /srv/code/walden/walden:/walden
-#            - web-root:/var/html
+    pgadmin:
+        image: fenglc/pgadmin4
+        ports:
+            - "5050:5050"
+        
 #    frontend:
 #        hostname: walden_frontend
 #        image: nginx:mainline-alpine
