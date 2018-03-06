@@ -22,7 +22,6 @@ echo "pg_ctl start..."
 gosu postgres bash -c 'PGUSER="${PGUSER:-postgres}" pg_ctl -D "$PGDATA" -o "-c listen_addresses='localhost'" -w start'
 
 echo "checkin if walden:db-table exists."
-echo "psql -v ON_ERROR_STOP=1 -U postgres -lqt | cut -d \| -f 1 | grep -qw walden"
 set -v
 set +e
 gosu postgres bash -c 'psql -v ON_ERROR_STOP=1 -U postgres -lqt | cut -d \| -f 1 | grep -qw walden'

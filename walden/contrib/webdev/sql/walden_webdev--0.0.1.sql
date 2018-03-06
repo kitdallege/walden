@@ -118,10 +118,30 @@ ALTER TABLE static_page OWNER to walden;
 -- Queries
 -- View
 -- Templates
+CREATE TABLE template
+(
+    id          SERIAL      NOT NULL PRIMARY KEY,
+    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
+    name        TEXT        NOT NULL UNIQUE
+
+)
 -- Assets
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
+CREATE OR REPLACE FUNCTION render(text, text) 
+RETURNS text AS 'pgstach.so', 'render' 
+LANGUAGE C STRICT IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION render_template(tmpl TEXT, context JSON)
+RETURNS TEXT AS $$
+    # TODO: cache modules in GD to avoid import cost.
+	import pystache
+	import json
+	return pystache.render(tmpl, json.loads(context))
+$$ LANGUAGE plpythonu STABLE;
+COMMENT ON FUNCTION render_template(tmpl TEXT, context JSON) IS
+    'Returns rendered string from  mustache template and json context.';
 
 
 /**************************************************************

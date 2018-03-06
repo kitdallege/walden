@@ -1,6 +1,6 @@
 version: '3.1'
 services:
-    db:
+    walden_db:
         hostname: walden_db
         build: ./db
         image: walden-db 
@@ -11,26 +11,22 @@ services:
         volumes:
             - ./db/initdb:/walden-entrypoint-initdb.d
             - /srv/code/walden/walden:/walden
-    pgadmin:
-        image: fenglc/pgadmin4
-        ports:
-            - "5050:5050"
-        
-#    frontend:
-#        hostname: walden_frontend
-#        image: nginx:mainline-alpine
-#        expose:
-#            - 80
-#        environment:
-#            - NGINX_HOST=cometo.vegas
-#            - NGINX_PORT=80
-#        volumes:
-#            - web-root:/usr/share/nginx/html
+        networks:
+            - pgadmin
+    walden_web:
+        hostname: walden_frontend
+        image: openresty/openresty:alpine-fat 
+        expose:
+            - 80
+        environment:
+            - VIRTUAL_HOST=www.cometo.vegas
+        networks:
+            - nginx-proxy
 #volumes:
 #    web-root:
 #
-#networks:
-#    default:
-#        external:
-#            name: nginx-proxy
-#
+networks:
+   pgadmin:
+       external: true
+   nginx-proxy:
+       external: true
