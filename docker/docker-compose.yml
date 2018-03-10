@@ -15,11 +15,11 @@ services:
             - pgadmin
     walden_web:
         hostname: walden_frontend
-        image: openresty/openresty:alpine-fat 
+        build: ./web
         expose:
             - 80
         environment:
-            - VIRTUAL_HOST=www.cometo.vegas
+            - VIRTUAL_HOST=*.cometo.vegas 
         networks:
             - nginx-proxy
 #volumes:

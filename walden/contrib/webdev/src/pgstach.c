@@ -5,39 +5,11 @@
 
 PG_MODULE_MAGIC;
 
-extern Datum hello(PG_FUNCTION_ARGS);
-
-PG_FUNCTION_INFO_V1(hello);
-
-Datum
-hello(PG_FUNCTION_ARGS)
-{
-    char greet[] = "Hello, ";
-    text *towhom;
-    int greetlen;
-    int towhomlen;
-    text *greeting;
-
-   towhom = PG_GETARG_TEXT_P(0);
-
-    // calc string sizes
-    greetlen = strlen(greet);
-    towhomlen = VARSIZE(towhom) - VARHDRSZ;
-
-    // allocate memory and set data structure size
-    greeting = (text *)palloc( greetlen + towhomlen);
-    SET_VARSIZE(greeting, greetlen + towhomlen + VARHDRSZ);
-    
-    // contruct greeting string.
-    strncpy(VARDATA(greeting), greet, greetlen);
-    strncpy(VARDATA(greeting) + greetlen, VARDATA(towhom), towhomlen);
-    
-    PG_RETURN_TEXT_P(greeting);
-}
-
 extern Datum render(PG_FUNCTION_ARGS);
+extern Datum slugify(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(render);
+PG_FUNCTION_INFO_V1(slugify);
 
 Datum
 render(PG_FUNCTION_ARGS)
@@ -65,4 +37,15 @@ render(PG_FUNCTION_ARGS)
         PG_RETURN_NULL();
     }
 }
+/*
+ * Convert to ASCII if 'allow_unicode' is False. Convert spaces to hyphens.
+ * Remove characters that aren't alphanumerics, underscores, or hyphens.
+ * Convert to lowercase. Also strip leading and trailing whitespace.
+ */
+Datum
+slugify(PG_FUNCTION_ARGS)
+{
+    //utf8_to_ascii: 
+    PG_RETURN_NULL();
+} 
 
