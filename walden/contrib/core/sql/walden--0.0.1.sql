@@ -175,15 +175,19 @@ COMMENT ON FUNCTION walden_add_history(e entity) IS
 /**************************************************************
  *                 General Functions                          *
  **************************************************************/
- -- TODO: Create C function for this as its used fairly heavily.
- -- Extra points for a SLUG datatype that slugify's automatically.
- CREATE OR REPLACE FUNCTION slugify(text)
- RETURNS TEXT AS $$
+/*
+CREATE OR REPLACE FUNCTION slugify(text)
+RETURNS TEXT AS $$
     SELECT lower(trim(both '-' FROM substring(
         regexp_replace(
             regexp_replace($1, E'[^\\w]', '-', 'g'), E'-+', '-', 'g'
         ) FROM 0 FOR 51)));
 $$ LANGUAGE SQL IMMUTABLE;
+*/
+
+CREATE OR REPLACE FUNCTION slugify(text) 
+RETURNS text AS 'walden_core.so', 'slugify' 
+LANGUAGE C STRICT IMMUTABLE;
 
 
 

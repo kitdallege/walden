@@ -4,6 +4,7 @@ services:
         hostname: walden_db
         build: ./db
         image: walden-db 
+        #privileged: true
         environment:
             - POSTGRES_PASSWORD=pgpass
         ports:

@@ -1,3 +1,8 @@
+#include <stdio.h>                                                                                                                                                                                                  
+#include <stdlib.h>                                                                                                                                                                                                 
+#include <ctype.h>
+#include <string.h>
+
 #include "postgres.h"
 #include "fmgr.h"
 #include "utils/builtins.h"
@@ -6,10 +11,8 @@
 PG_MODULE_MAGIC;
 
 extern Datum render(PG_FUNCTION_ARGS);
-extern Datum slugify(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(render);
-PG_FUNCTION_INFO_V1(slugify);
 
 Datum
 render(PG_FUNCTION_ARGS)
@@ -37,15 +40,5 @@ render(PG_FUNCTION_ARGS)
         PG_RETURN_NULL();
     }
 }
-/*
- * Convert to ASCII if 'allow_unicode' is False. Convert spaces to hyphens.
- * Remove characters that aren't alphanumerics, underscores, or hyphens.
- * Convert to lowercase. Also strip leading and trailing whitespace.
- */
-Datum
-slugify(PG_FUNCTION_ARGS)
-{
-    //utf8_to_ascii: 
-    PG_RETURN_NULL();
-} 
+
 

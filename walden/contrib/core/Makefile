@@ -1,6 +1,8 @@
-EXTENSION = walden            # the extensions name
+EXTENSION = walden
 EXTVERSION = 0.0.1
 
+MODULE_big = walden_coreh
+OBJS = $(patsubst %.c,%.o,$(wildcard src/*.c)) 
 DATA = sql/walden--0.0.1.sql  # script files to install
 
 # postgres build stuff
