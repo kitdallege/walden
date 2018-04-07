@@ -21,6 +21,9 @@ services:
             - 80
         environment:
             - VIRTUAL_HOST=*.cometo.vegas 
+        volumes:
+            - ./web/www:/var/html/c2v/www
+            - ./web/media:/var/html/c2v/media
         networks:
             - nginx-proxy
 #volumes:

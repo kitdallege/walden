@@ -186,7 +186,8 @@ $$ LANGUAGE SQL IMMUTABLE;
 */
 
 CREATE OR REPLACE FUNCTION slugify(text) 
-RETURNS text AS 'walden_core.so', 'slugify' 
+RETURNS text 
+AS 'walden_core.so', 'slugify' 
 LANGUAGE C STRICT IMMUTABLE;
 
 

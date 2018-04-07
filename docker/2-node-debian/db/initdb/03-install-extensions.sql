@@ -1,9 +1,17 @@
 -- pl/pgsql
 -- CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 -- COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
--- python
+
+-- PL/Python
 CREATE EXTENSION IF NOT EXISTS plpythonu WITH SCHEMA pg_catalog;
 COMMENT ON EXTENSION plpythonu IS 'PL/PythonU untrusted procedural language';
+
+-- PostGIS
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA walden CASCADE;
+CREATE EXTENSION IF NOT EXISTS postgis_topology WITH SCHEMA walden CASCADE;
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch WITH SCHEMA walden CASCADE;
+CREATE EXTENSION IF NOT EXISTS address_standardizer WITH SCHEMA walden CASCADE;
+
 -- Walden
 CREATE EXTENSION IF NOT EXISTS walden WITH SCHEMA walden CASCADE;
 COMMENT ON EXTENSION walden IS
