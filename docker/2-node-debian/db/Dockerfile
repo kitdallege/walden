@@ -4,7 +4,8 @@ VOLUME /walden
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 	apt-get -y install build-essential && \
-	apt-get -y install postgis
+	apt-get -y install apt-utils && \
+	apt-get -y install postgis && \
 	apt-get -y install libpq-dev postgresql-server-dev-10 && \
 	apt-get -y install python2.7 postgresql-plpython-10 && \
 	apt-get -y install python3   postgresql-plpython3-10 && \
