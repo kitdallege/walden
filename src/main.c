@@ -141,7 +141,7 @@ static page_spec *parse_page_spec(const char *payload)
 	spec->query = mk_abs_path(root_dir, query_dir,
 					json_object_get_string(attr), NULL);
 	attr = json_object_object_get(obj, "query_params");
-	spec->query_params = json_object_get_string(attr);
+	spec->query_params = strdup(json_object_get_string(attr));
 
 	json_object_put(obj); // release the ref
 	return spec;
@@ -162,6 +162,27 @@ static int file_exists(const char *filepath)
 	return !stat(filepath, &st);
 }
 
+/* munges query string to append params.
+ * how:
+ *   remove ';' @ the end.
+ *   scans until it finds ')', 
+ *   cuts it, 
+ *   adds params, 
+ *   and then adds the ');' back
+ */
+static void rewrite_query(char **query, const char *params)
+{
+	if (!params || strlen(params) < 1) { return ;}
+	fprintf(stderr, "rewrite_query: q:\"%s\" p:\"%s\"\n", *query, params);
+	//TODO: use less of strlen & strcat.
+	*query = realloc(*query, strlen(*query) + strlen(params) + 3);
+	char *p = *query + strlen(*query) - 1;
+	for (;*p != ')'; p--){};
+	*p = '\0';
+	strcat(*query, params);
+	strcat(*query, ");");
+	fprintf(stderr, "rewrite_query: query:\"%s\"\n", *query);
+}
 static char *get_query_result(PGconn *conn, const char *file, const char *params)
 {
 	char *cmd = read_file(file);
@@ -169,16 +190,7 @@ static char *get_query_result(PGconn *conn, const char *file, const char *params
 		fprintf(stderr, "Unable to load query: %s\n", file);
 		return NULL;
 	}
-	if (params && strlen(params) < 1) {
-		//TODO: use less of strlen & strcat. 
-		cmd = realloc(cmd, strlen(cmd) + strlen(params) + 3);
-		char *p = cmd + strlen(cmd) - 1;
-		// convert the current ';' to a space
-		while(';' != *p--){}
-		*p = ' ';
-		strcat(cmd, params);
-		strcat(cmd, ";");
-	}
+	rewrite_query(&cmd, params);
 	PGresult *res;
 	res = PQexec(conn, cmd);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
