@@ -11,14 +11,16 @@ CC	= gcc
 PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
 
-CFLAGS  += -g -O0 -Wall -Werror -Wstrict-prototypes -Wmissing-prototypes
-CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
-CFLAGS  += -I. -I./include `pg_config --includedir`
-CFLAGS  += -Wsign-compare -std=c11 -pedantic
+CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
+CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith 
+CFLAGS  += -I. -I./include -I`pg_config --includedir`
+CFLAGS  += `pkg-config json-c --cflags` -I../mustach
+CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 
-LDFLAGS = $(shell pkg-config libpq --libs)
+LDFLAGS = $(shell pkg-config libpq json-c --libs)
 LDFLAGS += -lm
 SRCS	= $(wildcard $(SRCDIR)/*.c) 
+SRCS    += ../mustach/mustach-json-c.c ../mustach/mustach.c
 
 S_OBJS=	$(SRCS:src/%.c=$(OBJDIR)/%.o)
 
