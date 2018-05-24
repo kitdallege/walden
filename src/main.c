@@ -22,11 +22,13 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <linux/limits.h>
 
 #include <libpq-fe.h>
 
@@ -105,10 +107,12 @@ static char *mk_abs_path(char *base, ...)
         va_start(args, base);
         str = (char *)base;
         for (unsigned int i = 0; i < count; i++) {
-                if (i) { *p++ = '/'; }
                 s_len = strlen(str);
-                memcpy(p, str, s_len);
-                p += s_len;
+		if (s_len) { 
+			if (i) { *p++ = '/'; }
+			memcpy(p, str, s_len);
+			p += s_len;
+		}
                 str = va_arg(args, char *);
         }
         va_end(args);
@@ -131,9 +135,11 @@ static page_spec *parse_page_spec(const char *payload)
 	spec->filename = strdup(json_object_get_string(attr));
 	attr = json_object_object_get(obj, "path");
 	temp = json_object_get_string(attr);
-	int offset = temp[4] == '/' ? 5 : 4; 
-	spec->path = mk_abs_path(root_dir, web_dir, temp + offset , NULL);
-	spec->path[strlen(spec->path)] = '\0';
+	fprintf(stderr, "page_spec: temp:\"%s\"\n", temp);
+	int offset = temp[4] == '/' ? 5 : 4;
+	spec->path = strdup(temp + offset);
+	//spec->path = mk_abs_path(root_dir, web_dir, temp + offset , NULL);
+	//spec->path[strlen(spec->path)-1] = '\0';
 	attr = json_object_object_get(obj, "template");
 	spec->template = mk_abs_path(root_dir, template_dir,
 					json_object_get_string(attr), NULL);
@@ -240,9 +246,50 @@ static char *render_template(const char *template, const char *json_data)
 	return result;
 }
 
+/* Adapted from 
+ * https://gist.github.com/JonathonReinhart/8c0d90191c38af2dcadb102c4e202950
+ */
+static int mkdir_p(const char *path)
+{
+        const size_t len = strlen(path);
+        char lpath[PATH_MAX];
+        char *p;
+
+        errno = 0;
+
+        if (len > sizeof(lpath) - 1) {
+                errno = ENAMETOOLONG;
+                return -1;
+        }
+
+        strcpy(lpath, path);
+
+        for (p = lpath + 1; *p; p++) {
+                if (*p == '/') {
+                        *p = '\0';
+                        if (mkdir(lpath, S_IRWXU)) {
+                                if (errno != EEXIST) {
+                                        return -1;
+                                }
+                        }
+                        *p = '/';
+                }
+        }
+        if (mkdir(lpath, S_IRWXU)) {
+                if (errno != EEXIST) {
+                        return -1;
+                }
+        }
+        return 0;
+}
+
 static int write_page(const char *name, const char *path, const char *data)
 {
-	char *filename = mk_abs_path((char *)path, (char *)name, NULL);
+	fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
+	char *filename = mk_abs_path(root_dir, web_dir, (char *)path,
+					(char *)name, NULL);
+	char *dir = strdup(filename);
+	mkdir_p(dirname(dir));
 	FILE *file = fopen(filename, "w");
 	if (!file) {
 		fprintf(stderr, "unable to open file for writing: %s\n", filename);
@@ -250,37 +297,54 @@ static int write_page(const char *name, const char *path, const char *data)
 		return 1;
 	}
 	fprintf(file, data);
-	fclose(file);	
+	fclose(file);
+	fprintf(stderr, "wrote_page wrote file: \"%s\"\n", filename);
 	free(filename);
+	//free(dir);
 	return 0;
 }
 
 static int write_pjax(const char *name, const char *path, const char *data)
 {
-	char *filename = mk_abs_path((char *)path, "_", name, NULL);
+	fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
+	char pjax_dir[] = "_";
+	char *filename = mk_abs_path(root_dir, web_dir, pjax_dir,
+					(char *)path, (char *)name, NULL);
+	char *dir = strdup(filename);
+	if (mkdir_p(dirname(dir))) {
+		fprintf(stderr, "error making directory: \"%s\"\n", dir);
+		return 1;
+	}
+	fprintf(stderr, "opening file: %s\n", filename);
 	FILE *file = fopen(filename, "w");
 	if (!file) {
 		fprintf(stderr, "unable to open file for writing: %s\n", filename);
 		free(filename);
 		return 1;
 	}
+	fprintf(stderr, "file opened fine\n");
 	// parse out main from data
-	char *start = strstr("<main>", data);
-	char *end = strstr("</main>", start);
+	char *start = strstr(data, "<main>");
+	char *end = strstr(start, "</main>");
+	fprintf(stderr, "called strstr(\"</main>\" \n");
 	char *pdata  = calloc(strlen(data) + 1, sizeof(*pdata));
+	fprintf(stderr, "going to strncpy some data\n");
 	strncpy(pdata, start, (end + 7) - start);
 	fprintf(file, pdata);
-	fclose(file);	
+	fprintf(stderr, "data wrote\n");
+	fclose(file);
+	fprintf(stderr, "wrote_pjax wrote file: \"%s\"\n", filename);
 	free(filename);
+	//free(dir);
 	free(pdata);
 	return 0;
-	return 1;
 }
 
 static int webpage_clear_dirty_flag(PGconn *conn, int id)
 {
-	char cmd[128];
-       	sprintf(cmd, "update webpage set dirty = false where id = %d", id);
+	char cmd[128]; // stmt w/sys.maxsize: 87
+       	sprintf(cmd, "update webpage set date_updated = default, dirty = false "
+			"where id = %d", id);
 	PGresult *res;
 	res = PQexec(conn, cmd);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -413,6 +477,9 @@ int main(int argc, char **argv)
 		PQconsumeInput(conn);
 		while ((notify = PQnotifies(conn))) {
 			//fprintf(stderr, "ASYNC NOTIFY of '%s' received from backend PID %d with a payload of: %s\n", notify->relname, notify->be_pid, notify->extra);
+			//TODO: add time elapsed to the log msg.
+			//it'd be interesting how long it takes per-handler
+			//call.
 		       	if (handle_page(conn, notify->extra)) {
 				fprintf(stderr, "handle_page error on: %s \n",
 						notify->extra);
