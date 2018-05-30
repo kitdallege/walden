@@ -142,7 +142,7 @@ static page_spec *parse_page_spec(const char *payload)
 	spec->filename = strdup(json_object_get_string(attr));
 	attr = json_object_object_get(obj, "path");
 	temp = json_object_get_string(attr);
-	fprintf(stderr, "page_spec: temp:\"%s\"\n", temp);
+	//fprintf(stderr, "page_spec: temp:\"%s\"\n", temp);
 	int offset = temp[4] == '/' ? 5 : 4;
 	spec->path = strdup(temp + offset);
 	attr = json_object_object_get(obj, "template");
@@ -185,7 +185,7 @@ static int file_exists(const char *filepath)
 static void rewrite_query(char **query, const char *params)
 {
 	if (!params || strlen(params) < 1) { return ;}
-	fprintf(stderr, "rewrite_query: \n q:\"%s\" \np:\"%s\"\n\n", *query, params);
+	//fprintf(stderr, "rewrite_query: \n q:\"%s\" \np:\"%s\"\n\n", *query, params);
 	//TODO: use less of strlen & strcat.
 	*query = realloc(*query, strlen(*query) + strlen(params) + 3);
 	char *p = *query + strlen(*query) - 1;
@@ -193,7 +193,7 @@ static void rewrite_query(char **query, const char *params)
 	*p = '\0';
 	strcat(*query, params);
 	strcat(*query, ");");
-	fprintf(stderr, "rewrite_query: query:\n\"%s\"\n\n", *query);
+	//fprintf(stderr, "rewrite_query: query:\n\"%s\"\n\n", *query);
 }
 
 static char *get_query_result(PGconn *conn, const char *file, const char *params)
@@ -339,7 +339,7 @@ static int write_file(const char *name, const char *data)
 
 static int write_page(const char *name, const char *path, const char *data)
 {
-	fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
+	//fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
 	char *filename = mk_abs_path(root_dir, web_dir, (char *)path,
 					(char *)name, NULL);
@@ -359,7 +359,7 @@ static int write_page(const char *name, const char *path, const char *data)
 
 static int write_pjax(const char *name, const char *path, const char *data)
 {
-	fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
+	//fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
 	char pjax_dir[] = "_";
 	char *filename = mk_abs_path(root_dir, web_dir, pjax_dir,
@@ -465,6 +465,20 @@ static int handle_page(PGconn *conn, const char *payload)
 	free(html);
 	return 0;
 }
+typedef struct timespec timespec;
+
+static timespec diff(timespec start, timespec end)
+{
+	timespec temp;
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	return temp;
+}
 
 int main(int argc, char **argv)
 {
@@ -501,7 +515,6 @@ int main(int argc, char **argv)
 	PQclear(res);
 	
 	while (!quit) {
-		fprintf(stderr, ".\n");
 		int sock = PQsocket(conn);
 		fd_set input_mask;
 
@@ -516,21 +529,25 @@ int main(int argc, char **argv)
 		PQconsumeInput(conn);
 		while ((notify = PQnotifies(conn))) {
 			//fprintf(stderr, "ASYNC NOTIFY of '%s' received from backend PID %d with a payload of: %s\n", notify->relname, notify->be_pid, notify->extra);
-			//TODO: add time elapsed to the log msg.
-			//it'd be interesting how long it takes per-handler
-			//call.
-			fprintf(stderr, "relname: %s\n", notify->relname);
-			clock_t ticks, new_ticks;
-			ticks = clock();
+			timespec ct1, ct2, pt1, pt2, td;
+			clock_gettime(CLOCK_MONOTONIC, &ct1);
+			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
+			//clock_t ticks, new_ticks;
+			//ticks = clock();
 			if (handle_page(conn, notify->extra)) {
 				fprintf(stderr, "handle_page error on: %s \n",
 						notify->extra);
 			} else {
-				new_ticks = clock();
-				double elapsed = (double)(new_ticks - ticks) * 1000.0 / CLOCKS_PER_SEC;
+				//new_ticks = clock();
+				//double elapsed = (double)(new_ticks - ticks) * 1000.0 / CLOCKS_PER_SEC;
+				clock_gettime(CLOCK_MONOTONIC, &ct2);
+				clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
 				fprintf(stderr, "updated page: %s \n", notify->extra);
-				fprintf(stderr, "time elapsed: %f msec / %ld ticks\n",
-						elapsed, (new_ticks - ticks)); 
+				td = diff(ct1, ct2);
+				fprintf(stderr, "system: time elapsed: %.3f msec / %ld ns\n", td.tv_nsec / 1000000.0, td.tv_nsec); 
+				td = diff(pt1, pt2);
+				fprintf(stderr, "cpu: time elapsed: %.3f msec / %ld ns\n", td.tv_nsec / 1000000.0, td.tv_nsec); 
+
 			}
 			PQfreemem(notify);
 		}

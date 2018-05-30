@@ -18,7 +18,7 @@ CFLAGS  += `pkg-config json-c --cflags` -I../mustach
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 
 LDFLAGS = $(shell pkg-config libpq json-c --libs)
-#LDFLAGS += -lm
+LDFLAGS += -lrt
 SRCS	= $(wildcard $(SRCDIR)/*.c) 
 SRCS    += ../mustach/mustach-json-c.c ../mustach/mustach.c
 
