@@ -28,6 +28,7 @@
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <time.h>
 #include <linux/limits.h>
 
 #include <libpq-fe.h>
@@ -35,6 +36,7 @@
 #include "mustach-json-c.h"
 #include <json-c/json.h> 
 
+// #define CONN_INFO "port=5555 dbname=test-db user=kit"
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
 #define LISTEN_CMD "listen dirty_webpage"
 
@@ -42,7 +44,11 @@ static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
 static char query_dir[] = "queries";
-
+static uid_t user = 33;
+static gid_t group = 33;
+// TODO: perms are 0666 . this should prob be tighen down @ some point to 0655
+static mode_t perms = DEFFILEMODE; 
+static mode_t dir_perms = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 static void exit_nicely(PGconn *conn)
 {
 	PQfinish(conn);
@@ -120,6 +126,7 @@ static char *mk_abs_path(char *base, ...)
         return dest;
 }
 
+/* TODO: any call to strdup needs to first test for 0x00 */
 static page_spec *parse_page_spec(const char *payload)
 {
 	const char *temp;
@@ -138,8 +145,6 @@ static page_spec *parse_page_spec(const char *payload)
 	fprintf(stderr, "page_spec: temp:\"%s\"\n", temp);
 	int offset = temp[4] == '/' ? 5 : 4;
 	spec->path = strdup(temp + offset);
-	//spec->path = mk_abs_path(root_dir, web_dir, temp + offset , NULL);
-	//spec->path[strlen(spec->path)-1] = '\0';
 	attr = json_object_object_get(obj, "template");
 	spec->template = mk_abs_path(root_dir, template_dir,
 					json_object_get_string(attr), NULL);
@@ -175,11 +180,12 @@ static int file_exists(const char *filepath)
  *   cuts it, 
  *   adds params, 
  *   and then adds the ');' back
+ * TODO: add handling for normal where clauses etc...
  */
 static void rewrite_query(char **query, const char *params)
 {
 	if (!params || strlen(params) < 1) { return ;}
-	fprintf(stderr, "rewrite_query: q:\"%s\" p:\"%s\"\n", *query, params);
+	fprintf(stderr, "rewrite_query: \n q:\"%s\" \np:\"%s\"\n\n", *query, params);
 	//TODO: use less of strlen & strcat.
 	*query = realloc(*query, strlen(*query) + strlen(params) + 3);
 	char *p = *query + strlen(*query) - 1;
@@ -187,8 +193,9 @@ static void rewrite_query(char **query, const char *params)
 	*p = '\0';
 	strcat(*query, params);
 	strcat(*query, ");");
-	fprintf(stderr, "rewrite_query: query:\"%s\"\n", *query);
+	fprintf(stderr, "rewrite_query: query:\n\"%s\"\n\n", *query);
 }
+
 static char *get_query_result(PGconn *conn, const char *file, const char *params)
 {
 	char *cmd = read_file(file);
@@ -251,93 +258,130 @@ static char *render_template(const char *template, const char *json_data)
  */
 static int mkdir_p(const char *path)
 {
-        const size_t len = strlen(path);
-        char lpath[PATH_MAX];
-        char *p;
+	const size_t len = strlen(path);
+	char lpath[PATH_MAX];
+	char *p;
 
-        errno = 0;
+	errno = 0;
 
-        if (len > sizeof(lpath) - 1) {
-                errno = ENAMETOOLONG;
-                return -1;
-        }
+	if (len > sizeof(lpath) - 1) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
 
-        strcpy(lpath, path);
+	strcpy(lpath, path);
 
-        for (p = lpath + 1; *p; p++) {
-                if (*p == '/') {
-                        *p = '\0';
-                        if (mkdir(lpath, S_IRWXU)) {
-                                if (errno != EEXIST) {
-                                        return -1;
-                                }
-                        }
-                        *p = '/';
-                }
-        }
-        if (mkdir(lpath, S_IRWXU)) {
-                if (errno != EEXIST) {
-                        return -1;
-                }
-        }
-        return 0;
+	for (p = lpath + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			if (mkdir(lpath, dir_perms)) {
+				if (errno != EEXIST) {
+					return -1;
+				}
+			}
+			*p = '/';
+		}
+	}
+	if (mkdir(lpath, dir_perms)) {
+		if (errno != EEXIST) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+/* use a temp file w/rename to make file writes atomic. */
+static int write_file(const char *name, const char *data)
+{
+	// name + ~
+	char temp_name[strlen(name) + 2];
+	snprintf(temp_name, sizeof(temp_name), "%s~", name);
+	// if it exists remove it
+	if (unlink(temp_name)) {
+		if (errno != ENOENT) {
+			fprintf(stderr, "unable to remove existing temp file: %s\n", strerror(errno));
+			return -1;	
+		}
+	}
+	// open temp file
+	int fd = open(temp_name, O_RDWR|O_CREAT|O_TRUNC, perms);
+	if (fd == -1) {
+		fprintf(stderr, "failed to open file for writing: %s\n", strerror(errno));
+		return -1;
+	}
+	// write to it
+	dprintf(fd, data);
+	//  flush the buffer	
+	if (fsync(fd)) {
+		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
+		return -1;
+	}
+	// change owner & group
+	if (fchown(fd, user, group)) {
+		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
+		return -1;
+	}
+	// set file perms
+	if (fchmod(fd, perms)) {
+		fprintf(stderr, "failed to chmod file: %s\n", strerror(errno));
+		return -1;
+	}
+	if (close(fd)) {
+		return -1;
+	}
+	// *atomic write via rename* [keep from causing an nginx error]
+	if (rename(temp_name, name)) {
+		fprintf(stderr, "failed to rename file: %s\n", strerror(errno));
+	   return -1;
+	}
+	return 0;
 }
 
 static int write_page(const char *name, const char *path, const char *data)
 {
 	fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
+	int ret = 0;
 	char *filename = mk_abs_path(root_dir, web_dir, (char *)path,
 					(char *)name, NULL);
 	char *dir = strdup(filename);
-	mkdir_p(dirname(dir));
-	FILE *file = fopen(filename, "w");
-	if (!file) {
-		fprintf(stderr, "unable to open file for writing: %s\n", filename);
-		free(filename);
-		return 1;
+	if (mkdir_p(dirname(dir))) {
+		fprintf(stderr, "error making directory: \"%s\"\n", dir);
+		ret =  -1;
 	}
-	fprintf(file, data);
-	fclose(file);
-	fprintf(stderr, "wrote_page wrote file: \"%s\"\n", filename);
+	if(write_file(filename, data)) {
+		fprintf(stderr, "write_page failed.\n");
+		ret = -1;
+	}
 	free(filename);
-	//free(dir);
-	return 0;
+	free(dir);
+	return ret;
 }
 
 static int write_pjax(const char *name, const char *path, const char *data)
 {
 	fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
+	int ret = 0;
 	char pjax_dir[] = "_";
 	char *filename = mk_abs_path(root_dir, web_dir, pjax_dir,
 					(char *)path, (char *)name, NULL);
 	char *dir = strdup(filename);
 	if (mkdir_p(dirname(dir))) {
 		fprintf(stderr, "error making directory: \"%s\"\n", dir);
-		return 1;
+		ret = -1;
 	}
-	fprintf(stderr, "opening file: %s\n", filename);
-	FILE *file = fopen(filename, "w");
-	if (!file) {
-		fprintf(stderr, "unable to open file for writing: %s\n", filename);
-		free(filename);
-		return 1;
-	}
-	fprintf(stderr, "file opened fine\n");
 	// parse out main from data
 	char *start = strstr(data, "<main>");
 	char *end = strstr(start, "</main>");
-	fprintf(stderr, "called strstr(\"</main>\" \n");
 	char *pdata  = calloc(strlen(data) + 1, sizeof(*pdata));
-	fprintf(stderr, "going to strncpy some data\n");
 	strncpy(pdata, start, (end + 7) - start);
-	fprintf(file, pdata);
-	fprintf(stderr, "data wrote\n");
-	fclose(file);
-	fprintf(stderr, "wrote_pjax wrote file: \"%s\"\n", filename);
+	if (write_file(filename, pdata)) {
+		fprintf(stderr, "write_pjax failed.\n");
+		ret = -1;
+	}
 	free(filename);
-	//free(dir);
+	free(dir);
 	free(pdata);
-	return 0;
+	return ret;
 }
 
 static int webpage_clear_dirty_flag(PGconn *conn, int id)
@@ -365,7 +409,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		fprintf(stderr, "unable to parse page_spec\n");
 		return 0;
 	}
-
 	// check template & query exist
 	if (!file_exists(spec->template)) {
 		fprintf(stderr, "missing template: %s\n", spec->template);
@@ -377,7 +420,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		free(spec);
 		return 1;
 	};
-	
 	// run query and get text response 
 	char *json_data = get_query_result(conn, spec->query, spec->query_params);
 	if (!json_data) {
@@ -385,7 +427,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		free(spec);
 		return 1;
 	}
-
 	// render template and get html text
 	char *html = render_template(spec->template, json_data);
 	if (!html) {
@@ -394,7 +435,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		//free(json_data);
 		return 1;
 	}
-
 	// write html to disk
 	if (write_page(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write html file.\n");
@@ -403,7 +443,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		free(html);
 		return 1;
 	}
-
 	// write pjax (<main> block of html) to '_' directory
 	if (write_pjax(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write pjax file.\n");
@@ -412,7 +451,6 @@ static int handle_page(PGconn *conn, const char *payload)
 		free(html);
 		return 1;
 	}
-
 	// update webpage setting dirty flag to false.
 	if (webpage_clear_dirty_flag(conn, spec->id)) {
 		fprintf(stderr, "unable to clear dirty flag: page{id=%d}\n",
@@ -463,6 +501,7 @@ int main(int argc, char **argv)
 	PQclear(res);
 	
 	while (!quit) {
+		fprintf(stderr, ".\n");
 		int sock = PQsocket(conn);
 		fd_set input_mask;
 
@@ -480,12 +519,18 @@ int main(int argc, char **argv)
 			//TODO: add time elapsed to the log msg.
 			//it'd be interesting how long it takes per-handler
 			//call.
-		       	if (handle_page(conn, notify->extra)) {
+			fprintf(stderr, "relname: %s\n", notify->relname);
+			clock_t ticks, new_ticks;
+			ticks = clock();
+			if (handle_page(conn, notify->extra)) {
 				fprintf(stderr, "handle_page error on: %s \n",
 						notify->extra);
 			} else {
-				fprintf(stderr, "updated page: %s \n",
-						notify->extra);
+				new_ticks = clock();
+				double elapsed = (double)(new_ticks - ticks) * 1000.0 / CLOCKS_PER_SEC;
+				fprintf(stderr, "updated page: %s \n", notify->extra);
+				fprintf(stderr, "time elapsed: %f msec / %ld ticks\n",
+						elapsed, (new_ticks - ticks)); 
 			}
 			PQfreemem(notify);
 		}
