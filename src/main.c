@@ -86,6 +86,7 @@ static char *read_file(const char *filename)
 	close(fd);
 	return data;
 }
+
 /* each positional argument is assumed to be a path component which will
  * be joined via '/' together. the last argument must be null, as its is 
  * used as a sentinal.
@@ -162,7 +163,9 @@ static void free_page_spec(page_spec *spec)
 {
 	free((char *)spec->path);
 	free((char *)spec->template);
+	free((char *)spec->filename);
 	free((char *)spec->query);
+	free((char *)spec->query_params);
 	free(spec);
 	spec = NULL;
 }
@@ -221,6 +224,7 @@ static char *get_query_result(PGconn *conn, const char *file, const char *params
 	 * PQprint(stdout, result, &options)
 	*/
 	PQclear(res);
+	free(cmd);
 	return result;
 }
 
@@ -291,6 +295,14 @@ static int mkdir_p(const char *path)
 }
 
 /* use a temp file w/rename to make file writes atomic. */
+// TODO: 90% of the time is spent here. find a way to fix that.
+// 2 msec per handle_page without write_file or 20 msec with it.
+// dprintf & flush is probably a lot of it. sort of the curse
+// of unbuffered IO, if you want to be sure it wrote, your stuck
+// waiting.. I can feel this heading towards buffering/trusting the os
+// and threading.. since there is a finite amount of file descriptors,
+// pg_connections, etc. it seems like something ya can thread pool up.
+// producer -> [work stealing pool] -> [db updater] [* logger *]
 static int write_file(const char *name, const char *data)
 {
 	// name + ~
@@ -417,28 +429,28 @@ static int handle_page(PGconn *conn, const char *payload)
 	};
 	if (!file_exists(spec->query)) {
 		fprintf(stderr, "missing query: %s\n", spec->query);
-		free(spec);
+		free_page_spec(spec);
 		return 1;
 	};
 	// run query and get text response 
 	char *json_data = get_query_result(conn, spec->query, spec->query_params);
 	if (!json_data) {
 		fprintf(stderr, "query returned no data:%s\n", spec->query);
-		free(spec);
+		free_page_spec(spec);
 		return 1;
 	}
 	// render template and get html text
 	char *html = render_template(spec->template, json_data);
 	if (!html) {
 		fprintf(stderr, "render_template had zero length result.\n");
-		free(spec);
-		//free(json_data);
+		free_page_spec(spec);
+		free(json_data);
 		return 1;
 	}
 	// write html to disk
 	if (write_page(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write html file.\n");
-		free(spec);
+		free_page_spec(spec);
 		free(json_data);
 		free(html);
 		return 1;
@@ -446,7 +458,7 @@ static int handle_page(PGconn *conn, const char *payload)
 	// write pjax (<main> block of html) to '_' directory
 	if (write_pjax(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write pjax file.\n");
-		free(spec);
+		free_page_spec(spec);
 		free(json_data);
 		free(html);
 		return 1;
@@ -455,12 +467,12 @@ static int handle_page(PGconn *conn, const char *payload)
 	if (webpage_clear_dirty_flag(conn, spec->id)) {
 		fprintf(stderr, "unable to clear dirty flag: page{id=%d}\n",
 				spec->id);
-		free(spec);
+		free_page_spec(spec);
 		free(json_data);
 		free(html);
 		return 1;
 	}
-	free(spec);
+	free_page_spec(spec);
 	free(json_data);
 	free(html);
 	return 0;
@@ -532,14 +544,10 @@ int main(int argc, char **argv)
 			timespec ct1, ct2, pt1, pt2, td;
 			clock_gettime(CLOCK_MONOTONIC, &ct1);
 			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-			//clock_t ticks, new_ticks;
-			//ticks = clock();
 			if (handle_page(conn, notify->extra)) {
 				fprintf(stderr, "handle_page error on: %s \n",
 						notify->extra);
 			} else {
-				//new_ticks = clock();
-				//double elapsed = (double)(new_ticks - ticks) * 1000.0 / CLOCKS_PER_SEC;
 				clock_gettime(CLOCK_MONOTONIC, &ct2);
 				clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
 				fprintf(stderr, "updated page: %s \n", notify->extra);
