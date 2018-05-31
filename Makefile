@@ -11,7 +11,7 @@ CC	= gcc
 PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
 
-CFLAGS  += -g -p -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
+CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith 
 CFLAGS  += -I. -I./include -I`pg_config --includedir`
 CFLAGS  += `pkg-config json-c --cflags` -I../mustach

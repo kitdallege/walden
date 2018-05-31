@@ -303,6 +303,8 @@ static int mkdir_p(const char *path)
 // and threading.. since there is a finite amount of file descriptors,
 // pg_connections, etc. it seems like something ya can thread pool up.
 // producer -> [work stealing pool] -> [db updater] [* logger *]
+// NOTE: after removing fsync call were down in that 3msec range
+// with 2-3/MB sec write speed from the process.
 static int write_file(const char *name, const char *data)
 {
 	// name + ~
@@ -322,12 +324,13 @@ static int write_file(const char *name, const char *data)
 		return -1;
 	}
 	// write to it
-	dprintf(fd, data);
-	//  flush the buffer	
+	//dprintf(fd, data); // <- suspect this might be O(n) instead of O(1)
+	write(fd, data, strlen(data)); // if len was passed in it'd help
+	/*/  flush the buffer	(this accounts for almost 90% of call time) 
 	if (fsync(fd)) {
 		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
 		return -1;
-	}
+	} */
 	// change owner & group
 	if (fchown(fd, user, group)) {
 		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
@@ -464,6 +467,11 @@ static int handle_page(PGconn *conn, const char *payload)
 		return 1;
 	}
 	// update webpage setting dirty flag to false.
+	// TODO: this is a major bottle neck as well. and needs to be 
+	// done (in the background (and/or) in batch).
+	// we should be somewhere around 380mb/sec if were sync'n
+	// and multiple gigs a second if were not. so this can def
+	// improve.
 	if (webpage_clear_dirty_flag(conn, spec->id)) {
 		fprintf(stderr, "unable to clear dirty flag: page{id=%d}\n",
 				spec->id);
