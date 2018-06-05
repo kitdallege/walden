@@ -1,0 +1,72 @@
+date: Sunday June 03 2018
+ After working Thur/Friday on the renderer I've now hit to where i'm 
+ attempting to optimize it.
+
+To start looking @ less than 1/2 MB/second. Ideally this ends up being IO
+bound on write. A good target would be 180 MB/sec, which is around
+half of what the disk can do. [below is comments from code]
+	// we should be somewhere around 350mb/sec if were sync'n
+	// and up to multiple gigs a second if were not (source: dd). so this 
+	// can def improve. (note: the 1tb spinning hdd is about 120 MB/s)
+	// might be good for a test target.
+	// without sync in write_file & this call were @ 18 MB/s so 
+	// in theory we could 20x that before the disk was stopping us.
+	// that would put us @ 20-40 µs (microseconds) per page
+	// or roughly 25K pages per second.
+	// realistically 5K a secound (200 micros) per page is a good goal.
+	// which has us at about 180 MB/s write speed.
+
+------------------------------------------------------
+[test data set]
+
+  19,357 object(s)..  test-of: update object set active = true;
+  19,706 webpage(s) in db.
+  39,416 files
+
+------------------------------------------------------
+Single Threaded / O(n) style pg_notify:
+
+  with flag flip / with fsync
+  rate: 0.485 MB/sec
+  time: 6:40 (same 2x runs)
+
+  without flag flip / with fsync
+  rate: 0.57 - 0.58 MB/sec 
+  time: 5:35 - 5:33 
+
+  with flag flip / without fsync
+  rate: 2.5 - 2.62 MB/sec 
+  time: 1:14 - 1:18 seconds 
+
+  without flag flip / without fsync  
+  rate: 19.4 - 21.5 MB/sec 
+  time: 0:09 - 0:10 seconds 
+
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(n) pg_notify
+ Goal: 20 MB/sec (like the last result) only properly updating the db.
+
+ rate: 19.4 MB/sec4
+ time: 0:10 (same 3x runs)
+
+ batching inserts (100, 250, 500)
+ rate: 16-17 MB/sec
+ time: 0:11 - 0:12 
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify / batching template
+
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify / batching template & query file
+
+
+* Vectorize Queries: 
+  Currently 1 query per page. This should be reduced to 1 per batch having
+  the same query.sql file.
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify / Worker Threads [batching template & query]
+
+

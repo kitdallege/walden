@@ -12,13 +12,13 @@ PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
 
 CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
-CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith 
+CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wno-unused-function 
 CFLAGS  += -I. -I./include -I`pg_config --includedir`
 CFLAGS  += `pkg-config json-c --cflags` -I../mustach
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 
 LDFLAGS = $(shell pkg-config libpq json-c --libs)
-LDFLAGS += -lrt
+LDFLAGS += -lrt -lz -pthread
 SRCS	= $(wildcard $(SRCDIR)/*.c) 
 SRCS    += ../mustach/mustach-json-c.c ../mustach/mustach.c
 
