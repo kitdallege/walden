@@ -15,6 +15,33 @@ flag_flipper_state *flag_flipper_new(void)
 	return st;
 }
 
+/* return'd char * is a comma separated list of the int arr[] arg..
+ * ex: "#,#,#,#"
+ * note: no trailing comma. also no comma on single element lists.
+ */
+static char *array_to_str(unsigned int arr[], size_t len)
+{
+	int d, num, d_idx = 0;
+	char temp[21] = { 0 };
+	char *p, *bp, *buf = calloc(20 * len + 1, sizeof(*buf));
+	bp = buf;
+	for (unsigned int i = 0; i < len; i++) {
+		if (i) { *bp++ = ','; }
+		num = arr[i];
+		p = temp;
+		// divide by 10 each iteration storing digit. temp ends up reversed.
+		do { 
+			d = num % 10;
+			*p++ = (char)(d+48);
+			num = num / 10;
+			d_idx++;
+		} while (num > 0);
+		*p++ = '\0';
+		while (d_idx) { *bp++ = temp[--d_idx]; } // (un)reverse temp and store
+	}
+	return buf;
+}
+
 void *webpage_clear_dirty_thread(void *arg)
 {
 	flag_flipper_state *st = (flag_flipper_state *)arg;
@@ -34,9 +61,9 @@ void *webpage_clear_dirty_thread(void *arg)
 	fprintf(stderr, "Set search_path = public \n");
 	PQclear(res);
 	// build query out of passed in ids.
-	char id_str_temp[8];
+	//char id_str_temp[8];
 	char *cmd = malloc(sizeof(*cmd) * 21100);
-	char *id_str = malloc(sizeof(*id_str) * 21000);
+	char *id_str; // = malloc(sizeof(*id_str) * 21000);
 	unsigned int count;
 	unsigned int work;
 	unsigned int ids[1000];	
@@ -63,19 +90,11 @@ void *webpage_clear_dirty_thread(void *arg)
 		}
 		pthread_mutex_unlock(&st->ctl.mutex);
 		// do stuff
-		memset(id_str, 0, 21000);
-		for (int i=count-1; i >=0; i--) {
-			memset(id_str_temp, 0, 8);
-			if (i) {
-				sprintf(id_str_temp, "%d,", ids[i]);
-			} else {
-				sprintf(id_str_temp, "%d", ids[i]);
-			}
-			strcat(id_str, id_str_temp);
-		}
+		id_str = array_to_str(ids, count);
 		memset(cmd, 0, sizeof(*cmd) * 21100);
        	sprintf(cmd, "update webpage set date_updated = default, dirty = false "
 			"where id in (%s);", id_str);
+		free(id_str);
 		fprintf(stderr, "cmd: %s\n", cmd);
 		fprintf(stderr, "updating %u page(s).\n", count);
 		res = PQexec(conn, cmd);
@@ -89,7 +108,7 @@ void *webpage_clear_dirty_thread(void *arg)
 	fprintf(stderr, "flag flipper shutting down..\n");
 
 	free(cmd);
-	free(id_str);
+	//free(id_str);
 	//free(&st->wq); // causes error ?
 	controller_destory(&st->ctl);
 	free(&st->ctl);

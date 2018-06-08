@@ -44,6 +44,7 @@ Single Threaded / O(n) style pg_notify:
 
 
 ------------------------------------------------------
+date: Tuesday June 05 2018
 Flag Flip On Dedicated Thread / O(n) pg_notify
  Goal: 20 MB/sec (like the last result) only properly updating the db.
 
@@ -55,18 +56,84 @@ Flag Flip On Dedicated Thread / O(n) pg_notify
  time: 0:11 - 0:12 
 
 ------------------------------------------------------
-Flag Flip On Dedicated Thread / O(1) pg_notify / batching template
+Flag Flip On Dedicated Thread / O(n) pg_notify / prepared statement
+Make the flag_flipper use a prepared statement:
 
+expected: slight/no improvement (though pg's writes will be cheaper).
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify 
+ signal notification, queries for 'dirty = true' and generates page_spec's
+ from that. still processes signal threaded in O(n) fashion from there.
+
+* expect:
+    A slight improvement just from dropping the json parse of
+    page_spec. Also maybe a little bit from using a single query instead of
+    O(n) notifications.
+
+NOTE:
+    This too should use a prepared statement, as it'll always be the same
+    query w/(no dynamic args).
+
+    This might require an async query (so that results can be streamed) as
+    pulling back 'all the pages' would probably be memory intensive. 
 
 ------------------------------------------------------
 Flag Flip On Dedicated Thread / O(1) pg_notify / batching template & query file
-
-
 * Vectorize Queries: 
   Currently 1 query per page. This should be reduced to 1 per batch having
   the same query.sql file.
+* Cache template lookup/read.
+
+int handle_page(PGconn *conn, flag_flipper_state *flipper, const char *payload)
+becomes (i think)
+int handle_pages(PGconn *conn, flag_flipper_state *flipper, page_spec **pages)
+
+It should have a local char * for query.sql and template.mustache
+and then loop over pages (checking template/query just in case it changes).
+
+Otherwise its the same general process as the O(n) version (might even be able
+to reuse it somewhat).
+
 
 ------------------------------------------------------
 Flag Flip On Dedicated Thread / O(1) pg_notify / Worker Threads [batching template & query]
+
+Same as above, only this time handle_pages is duplicated in multiple threads
+working off the same batch-queue. 
+
+expect: whatever were doing before, should be able to see multiples of that 
+ (some thing like: single-thread-perf * (num-of-threads * 0.8) so like each
+ additional thread ads 80% max perf to the overall.
+
+eg: 20 MB/sec * 4 threads == 64 MB/sec
+
+ideally i can do better than ^ but we'll see.
+
+------------------------------------------------------
+Other ideas for perf
+------------------------------------------------------
+Gzip output
+    This is mostly a nginx thing. But having the content pre gzip'd reduces 
+    the overhead of serving it. Also if the renderer ever gets fast enough
+    where I/O is the bottleneck then, this is a means to trade cpu for disk.
+Atomic 'lock free' queues.
+    A fair amount of churn happens @ the mutex/conditional level. If atomics could
+    be used in there stead, i'm fairly certain the amount of 'chatter' would drop
+    a ton.
+
+Prepared queries
+    One could load and pre-prepare the queies.sql files as well as the
+    dirty-flag-flipper.
+
+Templates with AST/prepared
+    Could work such that they parse into an ast and we hold that in
+    memory. ATM: it parses as it renders.
+
+Templates JIT
+    If the templates had an ast, its one step away from running that through 
+    libjit/llvm and producing machine code. So a template becomes a function
+    call taking json_object * as context. No ast to eval, just a simple hunk
+    of code to run that writes to a buffer and spits back a char * to it.
 
 
