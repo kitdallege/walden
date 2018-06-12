@@ -18,7 +18,7 @@ static char query_dir[] = "queries";
  *  "query_params" : ""
  *}
 */
-page_spec *parse_page_spec(const char *payload)
+PageSpec *parse_page_spec(const char *payload)
 {
 	const char *temp;
 	json_object *obj, *attr;
@@ -26,7 +26,7 @@ page_spec *parse_page_spec(const char *payload)
 	if (!obj) {
 		return NULL;
 	}
-	page_spec *spec = malloc(sizeof(*spec));
+	PageSpec *spec = malloc(sizeof(*spec));
 	attr = json_object_object_get(obj, "id");
 	spec->id = json_object_get_int(attr);
 	attr = json_object_object_get(obj, "filename");
@@ -49,7 +49,7 @@ page_spec *parse_page_spec(const char *payload)
 	return spec;
 }
 
-void free_page_spec(page_spec *spec)
+void free_page_spec(PageSpec *spec)
 {
 	free((char *)spec->path);
 	free((char *)spec->template);
@@ -59,5 +59,4 @@ void free_page_spec(page_spec *spec)
 	free(spec);
 	spec = NULL;
 }
-
 

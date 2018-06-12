@@ -3,8 +3,7 @@
 
 #include "controller.h"
 
-
-int controller_init(controller *c)
+int controller_init(Controller *c)
 {
 	if (pthread_mutex_init(&(c->mutex), NULL) ||
 		pthread_cond_init(&(c->cond), NULL)) {
@@ -15,7 +14,7 @@ int controller_init(controller *c)
 	return 0;
 }
 
-int controller_destory(controller *c)
+int controller_destory(Controller *c)
 {
 	if (pthread_cond_destroy(&(c->cond)) ||
 		pthread_mutex_destroy(&(c->mutex))) {
@@ -26,7 +25,7 @@ int controller_destory(controller *c)
 	return 0;
 }
 
-int controller_activate(controller *c)
+int controller_activate(Controller *c)
 {
 	if (pthread_mutex_lock(&(c->mutex))) {
 		return 0;
@@ -37,7 +36,7 @@ int controller_activate(controller *c)
 	return 1;
 }
 
-int controller_deactivate(controller *c)
+int controller_deactivate(Controller *c)
 {
 	if (pthread_mutex_lock(&(c->mutex))) {
 		return 0;
@@ -48,7 +47,7 @@ int controller_deactivate(controller *c)
 	return 1;
 }
 
-int controller_force(controller *c)
+int controller_force(Controller *c)
 {
 	if (pthread_mutex_lock(&(c->mutex))) {
 		return 0;
@@ -59,7 +58,7 @@ int controller_force(controller *c)
 	return 1;
 }
 
-int controller_unforce(controller *c)
+int controller_unforce(Controller *c)
 {
 	fprintf(stderr, "unforce lock mutex\n");
 	if (pthread_mutex_lock(&(c->mutex))) {

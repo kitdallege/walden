@@ -157,4 +157,3 @@ int write_file(const char *name, const char *data)
 	return 0;
 }
 
-

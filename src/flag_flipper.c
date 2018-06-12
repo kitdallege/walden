@@ -5,13 +5,13 @@
 
 #include "flag_flipper.h"
 
-flag_flipper_state *flag_flipper_new(void)
+FlagFlipperState *flag_flipper_new(void)
 {
-	flag_flipper_state *st = malloc(sizeof(*st));
-	controller *ctl = malloc(sizeof(*ctl));
+	FlagFlipperState *st = malloc(sizeof(*st));
+	Controller *ctl = malloc(sizeof(*ctl));
 	controller_init(ctl);
 	st->ctl = *ctl;
-	st->wq = *queue_new();
+	st->wq = bqueue_new(((BQOpts){.item_size = sizeof(int)}));
 	return st;
 }
 
@@ -44,7 +44,7 @@ static char *array_to_str(unsigned int arr[], size_t len)
 
 void *webpage_clear_dirty_thread(void *arg)
 {
-	flag_flipper_state *st = (flag_flipper_state *)arg;
+	FlagFlipperState *st = (FlagFlipperState*)arg;
 	// create a PGconn locally.
 	PGresult *res;
 	PGconn *conn = PQconnectdb("port=5432 dbname=c2v user=c2v_admin");
@@ -68,21 +68,20 @@ void *webpage_clear_dirty_thread(void *arg)
 	unsigned int work;
 	unsigned int ids[1000];	
 	while (st->ctl.active) {
-		//while (!st->wq.head && st->wq.size < 100 && st->ctl.active) {
-		while ((st->wq.size < 900  && !st->ctl.force) && st->ctl.active) {
-			fprintf(stderr, "size: %lu, force: %d, active: %d : ", st->wq.size, st->ctl.force, st->ctl.active);
+		while ((bqueue_size(st->wq) < 900  && !st->ctl.force) && st->ctl.active) {
+			fprintf(stderr, "size: %lu, force: %d, active: %d : ", bqueue_size(st->wq), st->ctl.force, st->ctl.active);
 			pthread_cond_wait(&st->ctl.cond, &st->ctl.mutex);
 		}
 		if (!st->ctl.active) { break; }
 		if (st->ctl.force) {
 			st->ctl.force = 0;
 		}
-		fprintf(stderr, "size: %lu, force: %d, active: %d : ", st->wq.size, st->ctl.force, st->ctl.active);
+		fprintf(stderr, "size: %lu, force: %d, active: %d : ", bqueue_size(st->wq), st->ctl.force, st->ctl.active);
 		// rip down an array < 1000 of ids.
-		work = (unsigned int)queue_get(&st->wq); 
+		work = *(unsigned int *)bqueue_pop(st->wq); 
 		for (count = 0; count < 1000 && work; count++) {
 			ids[count] = work;
-			work = (unsigned int)queue_get(&st->wq);
+			work = *(unsigned int*)bqueue_pop(st->wq);
 		}
 		if (!count) {
 			//fprintf(stderr, "skipping count of 0.\n");

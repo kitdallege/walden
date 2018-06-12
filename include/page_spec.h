@@ -1,7 +1,7 @@
 #ifndef PAGE_SPEC_H 
 #define PAGE_SPEC_H
 
-typedef struct page_spec 
+typedef struct PageSpec 
 {
 	unsigned int id;
 	const char *filename;
@@ -9,10 +9,10 @@ typedef struct page_spec
 	char *template;
 	char *query;
 	const char *query_params;
-} page_spec;
+} PageSpec;
 
-page_spec *parse_page_spec(const char *payload);
-void free_page_spec(page_spec *spec);
+PageSpec *parse_page_spec(const char *payload);
+void free_page_spec(PageSpec *spec);
 
 #endif
 

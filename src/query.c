@@ -59,4 +59,3 @@ char *get_query_result(PGconn *conn, const char *file, const char *params)
 	return result;
 }
 
-

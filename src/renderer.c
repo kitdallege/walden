@@ -12,10 +12,10 @@
 static char root_dir[] = "/var/html/c2v";
 static char web_dir[] = "www";
 
-int handle_page(PGconn *conn, flag_flipper_state *flipper, const char *payload)
+int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 {
 	// parse payload into a struct
-	page_spec *spec = parse_page_spec(payload);
+	PageSpec *spec = parse_page_spec(payload);
 	if (!spec) {
 		fprintf(stderr, "unable to parse page_spec\n");
 		return 0;
@@ -87,7 +87,7 @@ int handle_page(PGconn *conn, flag_flipper_state *flipper, const char *payload)
 	// clear_dirty_flag(spec->id);
 	// add to a queue so that the background thread can process in chunks.
 	pthread_mutex_lock(&(flipper->ctl.mutex));
-	queue_put(&(flipper->wq), spec->id);
+	bqueue_push(flipper->wq, &spec->id);
 	pthread_mutex_unlock(&(flipper->ctl.mutex));
 	//pthread_cond_broadcast(&(flipper->ctl.cond));
 	// cleanup
@@ -143,3 +143,4 @@ int write_pjax(const char *name, const char *path, const char *data)
 	free(pdata);
 	return ret;
 }
+

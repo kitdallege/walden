@@ -35,6 +35,8 @@
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
 #define LISTEN_CMD "listen dirty_webpage"
 static int quit = 0;
+static PGconn *conn;
+static FlagFlipperState *state;
 pthread_t tid;
 typedef struct timespec timespec;
 
@@ -50,7 +52,9 @@ static timespec diff(timespec start, timespec end)
 	}
 	return temp;
 }
-static char* get_formatted_time(void) {
+
+static char* get_formatted_time(void)
+{
 
     time_t rawtime;
     struct tm* timeinfo;
@@ -65,15 +69,12 @@ static char* get_formatted_time(void) {
     return _retval;
 }
 
-static PGconn *conn;
-static flag_flipper_state *state;
-
 static void handle_signal(int signal)
 {
 	fprintf(stderr, "\n Caught Signal: %d \n", signal);
 	PQfinish(conn);
 	fprintf(stderr, "size: %lu, force: %d, active: %d : ",
-			state->wq.size, state->ctl.force, state->ctl.active);
+			bqueue_size(state->wq), state->ctl.force, state->ctl.active);
 	// f'trying to determine its state. just cancel the damn thing and bail.
 	//pthread_cancel(tid);
 	if (state->ctl.force) {

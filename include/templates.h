@@ -4,3 +4,4 @@
 char *render_template(const char *template, const char *json_data);
 
 #endif
+
