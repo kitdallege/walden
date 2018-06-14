@@ -10,8 +10,8 @@ FlagFlipperState *flag_flipper_new(void)
 	FlagFlipperState *st = malloc(sizeof(*st));
 	Controller *ctl = malloc(sizeof(*ctl));
 	controller_init(ctl);
-	st->ctl = *ctl;
-	st->wq = bqueue_new(((BQOpts){.item_size = sizeof(int)}));
+	st->ctl = ctl;
+	st->wq = bqueue_new();
 	return st;
 }
 
@@ -61,56 +61,57 @@ void *webpage_clear_dirty_thread(void *arg)
 	fprintf(stderr, "Set search_path = public \n");
 	PQclear(res);
 	// build query out of passed in ids.
-	//char id_str_temp[8];
 	char *cmd = malloc(sizeof(*cmd) * 21100);
 	char *id_str; // = malloc(sizeof(*id_str) * 21000);
+	//size_t q_size;
 	unsigned int count;
-	unsigned int work;
+	unsigned int *work;
 	unsigned int ids[1000];	
-	while (st->ctl.active) {
-		while ((bqueue_size(st->wq) < 900  && !st->ctl.force) && st->ctl.active) {
-			fprintf(stderr, "size: %lu, force: %d, active: %d : ", bqueue_size(st->wq), st->ctl.force, st->ctl.active);
-			pthread_cond_wait(&st->ctl.cond, &st->ctl.mutex);
+	while (st->ctl->active) {
+		while ((bqueue_size(st->wq) < 900  && !st->ctl->force) && st->ctl->active) {
+			fprintf(stderr, "size: %lu, force: %d, active: %d : \n", bqueue_size(st->wq), st->ctl->force, st->ctl->active);
+			pthread_cond_wait(&st->ctl->cond, &st->ctl->mutex);
 		}
-		if (!st->ctl.active) { break; }
-		if (st->ctl.force) {
-			st->ctl.force = 0;
-		}
-		fprintf(stderr, "size: %lu, force: %d, active: %d : ", bqueue_size(st->wq), st->ctl.force, st->ctl.active);
-		// rip down an array < 1000 of ids.
-		work = *(unsigned int *)bqueue_pop(st->wq); 
-		for (count = 0; count < 1000 && work; count++) {
-			ids[count] = work;
-			work = *(unsigned int*)bqueue_pop(st->wq);
+		if (!st->ctl->active) { break; }
+		if (st->ctl->force) { st->ctl->force = 0; }
+		count = 0;
+		while (count < 1000) {
+			work = bqueue_pop(st->wq); // peek ? would move this to the conditional
+			if (!work) { break; }
+			ids[count] = *work;
+			free(work);
+			count++;
 		}
 		if (!count) {
-			//fprintf(stderr, "skipping count of 0.\n");
+			fprintf(stderr, "skipping count of 0.\n");
 			continue;
 		}
-		pthread_mutex_unlock(&st->ctl.mutex);
+		pthread_mutex_unlock(&st->ctl->mutex);
+
 		// do stuff
 		id_str = array_to_str(ids, count);
 		memset(cmd, 0, sizeof(*cmd) * 21100);
        	sprintf(cmd, "update webpage set date_updated = default, dirty = false "
 			"where id in (%s);", id_str);
 		free(id_str);
+		id_str = NULL;
 		fprintf(stderr, "cmd: %s\n", cmd);
 		fprintf(stderr, "updating %u page(s).\n", count);
 		res = PQexec(conn, cmd);
 		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 			fprintf(stderr, "webpage_clear_dirty_flag failed: %s\n", PQerrorMessage(conn));
-			PQclear(res);
 		}
 		PQclear(res);
-		pthread_mutex_lock(&st->ctl.mutex);
+		pthread_mutex_lock(&st->ctl->mutex);
 	}
 	fprintf(stderr, "flag flipper shutting down..\n");
-
+	fprintf(stderr, "size: %lu\n", bqueue_size(st->wq));
 	free(cmd);
-	//free(id_str);
-	//free(&st->wq); // causes error ?
-	controller_destory(&st->ctl);
-	free(&st->ctl);
+	bqueue_del(st->wq);
+	controller_destory(st->ctl); free(st->ctl);
+	free(st);
+	fprintf(stderr, "flag fliper exiting\n");
+	PQfinish(conn);
 	return NULL;
 }
 

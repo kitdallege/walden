@@ -15,11 +15,27 @@
  * Items are push'd onto the tail and pop'd from the head.
  * The head and tail can reside on different blocks.
  ****************************************************************************/
+// For the use case of the render, i'm thinking the Block.data should be
+// void ** , the idea being the 'consumer' of the queue should handle
+// freeing memory. And really were just holding arrays of pointers to 
+// 'other' memory, thus avoiding coping everything each time it touches a
+// queue.
+// use-cases for renderer:
+//  arrays of 'pre allocated' pg result pointers 
+//  arrays of unsigned int(s) (^ ids from)
+//  for speed its likely better to specialize to a type.
+//  c++ would use templates, we can use macros. 
+//  if that is the case then i should create the specalized instances
+//  and then create the marcro from those.
+//
+//  might just go the (void **) route to 'get shit done' with a TODO
+//  note mentioning the macro specialization might hold a few % perf gains
+//  due to avoiding casting.
 typedef void* BQItem;
 
 typedef struct Block {
 	struct Block *next; 
-	unsigned char data[];
+	void **data;
 } Block;
 
 typedef struct BQueue {
@@ -28,12 +44,8 @@ typedef struct BQueue {
 	int head_idx, tail_idx, items_per_block;
 } BQueue;
 
-typedef struct BQOpts {
-	size_t item_size;    	
-} BQOpts;
-
 // Lifecycle
-BQueue *bqueue_new(BQOpts opts);
+BQueue *bqueue_new(void);
 void bqueue_del(BQueue *queue);
 
 // Public API  

@@ -5,8 +5,8 @@
 
 int controller_init(Controller *c)
 {
-	if (pthread_mutex_init(&(c->mutex), NULL) ||
-		pthread_cond_init(&(c->cond), NULL)) {
+	if (pthread_mutex_init(&c->mutex, NULL) ||
+		pthread_cond_init(&c->cond, NULL)) {
 		return 1;
 	}
 	c->active = 0;

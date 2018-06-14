@@ -10,7 +10,7 @@ test/test: bqueue.c test/test.c
 	$(CC) $^ $(CFLAGS) -o $@
 
 clean:
-	@rm test
+	@rm test/test
 
 .PHONY: test clean
 

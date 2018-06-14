@@ -7,7 +7,7 @@
 #include "controller.h"
 
 typedef struct FlagFlipperState {
-	Controller ctl;
+	Controller *ctl;
 	BQueue *wq;
 } FlagFlipperState;
 

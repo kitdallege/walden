@@ -86,9 +86,12 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 	} */ 
 	// clear_dirty_flag(spec->id);
 	// add to a queue so that the background thread can process in chunks.
-	pthread_mutex_lock(&(flipper->ctl.mutex));
-	bqueue_push(flipper->wq, &spec->id);
-	pthread_mutex_unlock(&(flipper->ctl.mutex));
+	pthread_mutex_lock(&(flipper->ctl->mutex));
+	unsigned int *id = malloc(sizeof(*id));
+	*id = spec->id;
+	bqueue_push(flipper->wq, id);
+	//fprintf(stderr, "bqueue_push: %d (%p) size: %lu\n", *id, (void *)id, bqueue_size(flipper->wq));
+	pthread_mutex_unlock(&(flipper->ctl->mutex));
 	//pthread_cond_broadcast(&(flipper->ctl.cond));
 	// cleanup
 	free_page_spec(spec);

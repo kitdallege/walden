@@ -74,25 +74,26 @@ static void handle_signal(int signal)
 	fprintf(stderr, "\n Caught Signal: %d \n", signal);
 	PQfinish(conn);
 	fprintf(stderr, "size: %lu, force: %d, active: %d : ",
-			bqueue_size(state->wq), state->ctl.force, state->ctl.active);
+			bqueue_size(state->wq), state->ctl->force, state->ctl->active);
 	// f'trying to determine its state. just cancel the damn thing and bail.
 	//pthread_cancel(tid);
-	if (state->ctl.force) {
+	if (state->ctl->force) {
 		fprintf(stderr, "unforcing\n");
-		controller_unforce(&(state->ctl));
+		controller_unforce(state->ctl);
 		fprintf(stderr, "unforced");
 	} else {
 		fprintf(stderr, "controller_force \n");
-		controller_force(&(state->ctl));
+		controller_force(state->ctl);
 		fprintf(stderr, "controller_forced \n");
-		pthread_cond_signal(&(state->ctl.cond));
+		pthread_cond_signal(&(state->ctl->cond));
 	}
 	fprintf(stderr, "calling controller_deactivate: \n");
-	controller_deactivate(&(state->ctl));
+	controller_deactivate(state->ctl);
 	fprintf(stderr, "called controller_deactivate: \n");
 	fprintf(stderr, "calling pthread_join: \n");
 	pthread_join(tid, NULL);
 	fprintf(stderr, "called pthread_join: \n");
+	//free(state);
 	exit(1);
 }
 
@@ -139,7 +140,7 @@ int main(int argc, char **argv)
 	 * pass in a controller so the thread can be shutdown externally.
 	 */
 	state = flag_flipper_new();
-	controller_activate(&(state->ctl));	
+	controller_activate(state->ctl);	
 	if (pthread_create(&tid, NULL, webpage_clear_dirty_thread, (void *)state)) {
 		fprintf(stderr, "unable to start worker thread. \n");
 		quit = 1;
@@ -184,15 +185,15 @@ int main(int argc, char **argv)
 			PQfreemem(notify);
 			if (count++ % 1000 == 0) {
 				//fprintf(stderr, "broadcast: module 1k\n");
-				pthread_cond_broadcast(&(state->ctl.cond));
+				pthread_cond_broadcast(&state->ctl->cond);
 			}
 		}
 		fprintf(stderr, "broadcast: outside of notify loop\n");
-		controller_force(&state->ctl);
-		pthread_cond_signal(&(state->ctl.cond));
+		controller_force(state->ctl);
+		pthread_cond_signal(&state->ctl->cond);
 		//fprintf(stderr, "broadcast: sent signal \n");
 	}
-	controller_deactivate(&(state->ctl));
+	controller_deactivate(state->ctl);
 	pthread_join(tid, NULL);
 	fprintf(stderr, "Done.\n");
 	PQfinish(conn);
