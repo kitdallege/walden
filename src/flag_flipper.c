@@ -23,8 +23,9 @@ static char *array_to_str(unsigned int arr[], size_t len)
 {
 	int d, num, d_idx = 0;
 	char temp[21] = { 0 };
-	char *p, *bp, *buf = calloc(20 * len + 1, sizeof(*buf));
+	char *p, *bp, *buf = calloc(20 * len + 4, sizeof(*buf));
 	bp = buf;
+	*bp++ = '{';
 	for (unsigned int i = 0; i < len; i++) {
 		if (i) { *bp++ = ','; }
 		num = arr[i];
@@ -39,6 +40,8 @@ static char *array_to_str(unsigned int arr[], size_t len)
 		*p++ = '\0';
 		while (d_idx) { *bp++ = temp[--d_idx]; } // (un)reverse temp and store
 	}
+	*bp++ = '}';
+	*bp = '\0';
 	return buf;
 }
 
@@ -60,13 +63,23 @@ void *webpage_clear_dirty_thread(void *arg)
 	}
 	fprintf(stderr, "Set search_path = public \n");
 	PQclear(res);
+	// TODO: setup prepared statement
+	res = PQprepare(conn, "flip-flag",
+		"update webpage set date_updated = default, dirty = false where id = ANY($1);",
+		1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement!\n");
+		PQclear(res);
+	}
 	// build query out of passed in ids.
-	char *cmd = malloc(sizeof(*cmd) * 21100);
-	char *id_str; // = malloc(sizeof(*id_str) * 21000);
+	//char *cmd = malloc(sizeof(*cmd) * 21100);
+	//char *id_str; // = malloc(sizeof(*id_str) * 21000);
 	//size_t q_size;
 	unsigned int count;
 	unsigned int *work;
 	unsigned int ids[1000];	
+	const char *vals[1];
+
 	while (st->ctl->active) {
 		while ((bqueue_size(st->wq) < 900  && !st->ctl->force) && st->ctl->active) {
 			fprintf(stderr, "size: %lu, force: %d, active: %d : \n", bqueue_size(st->wq), st->ctl->force, st->ctl->active);
@@ -89,24 +102,22 @@ void *webpage_clear_dirty_thread(void *arg)
 		pthread_mutex_unlock(&st->ctl->mutex);
 
 		// do stuff
-		id_str = array_to_str(ids, count);
-		memset(cmd, 0, sizeof(*cmd) * 21100);
-       	sprintf(cmd, "update webpage set date_updated = default, dirty = false "
-			"where id in (%s);", id_str);
-		free(id_str);
-		id_str = NULL;
-		fprintf(stderr, "cmd: %s\n", cmd);
+		vals[0] = array_to_str(ids, count);
+		fprintf(stderr, "ids: %s\n", vals[0]);
 		fprintf(stderr, "updating %u page(s).\n", count);
-		res = PQexec(conn, cmd);
+		res = PQexecPrepared(conn, "flip-flag", 1, vals, NULL, NULL, 0);
+		//res = PQexec(conn, cmd);
 		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 			fprintf(stderr, "webpage_clear_dirty_flag failed: %s\n", PQerrorMessage(conn));
 		}
+		//free(id_str);
+		//id_str = NULL;
 		PQclear(res);
 		pthread_mutex_lock(&st->ctl->mutex);
 	}
 	fprintf(stderr, "flag flipper shutting down..\n");
 	fprintf(stderr, "size: %lu\n", bqueue_size(st->wq));
-	free(cmd);
+	//free(cmd);
 	bqueue_del(st->wq);
 	controller_destory(st->ctl); free(st->ctl);
 	free(st);
