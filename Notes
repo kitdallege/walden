@@ -61,6 +61,11 @@ Make the flag_flipper use a prepared statement:
 
 expected: slight/no improvement (though pg's writes will be cheaper).
 
+confirmed!
+
+rate: 17-19 MB/sec
+time: 0:10 - 0:11
+
 ------------------------------------------------------
 Flag Flip On Dedicated Thread / O(1) pg_notify 
  signal notification, queries for 'dirty = true' and generates page_spec's
@@ -136,4 +141,20 @@ Templates JIT
     call taking json_object * as context. No ast to eval, just a simple hunk
     of code to run that writes to a buffer and spits back a char * to it.
 
+------------------------
+total:
+	0.580506 41.671 0.293 11440.6
+
+parse_page_spec: avg max min total
+	0.00804252 0.182 0.006 158.502
+
+get_query_result: avg max min total
+	0.278731 24.213 0.092 5493.23
+
+render_template: avg max min total
+	0.0825074 2.654 0.044 1626.06
+write_page: avg max min total
+	0.0888526 31.154 0.057 1751.11
+write_pjax: avg max min total
+	0.0843485 0.367 0.058 1662.34
 

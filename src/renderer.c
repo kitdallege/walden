@@ -12,14 +12,36 @@
 static char root_dir[] = "/var/html/c2v";
 static char web_dir[] = "www";
 
+typedef struct timespec timespec;
+
+static timespec diff(timespec start, timespec end)
+{
+	timespec temp;
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	return temp;
+}
+
+
 int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 {
+	timespec ct1, ct2, pt1, pt2, td1, td2;
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// parse payload into a struct
 	PageSpec *spec = parse_page_spec(payload);
 	if (!spec) {
 		fprintf(stderr, "unable to parse page_spec\n");
 		return 0;
 	}
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\tparse_page_spec: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// check template & query exist
 	if (!file_exists(spec->template)) {
 		fprintf(stderr, "missing template: %s\n", spec->template);
@@ -31,6 +53,10 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 		free_page_spec(spec);
 		return 1;
 	};
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\tfile_exists: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// run query and get text response 
 	char *json_data = get_query_result(conn, spec->query, spec->query_params);
 	if (!json_data) {
@@ -38,6 +64,10 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 		free_page_spec(spec);
 		return 1;
 	}
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\tget_query_result: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// render template and get html text
 	char *html = render_template(spec->template, json_data);
 	if (!html) {
@@ -46,6 +76,10 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 		free(json_data);
 		return 1;
 	}
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\trender_template: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// write html to disk
 	if (write_page(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write html file.\n");
@@ -54,6 +88,10 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 		free(html);
 		return 1;
 	}
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\twrite_page: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
 	// write pjax (<main> block of html) to '_' directory
 	if (write_pjax(spec->filename, spec->path, html)) {
 		fprintf(stderr, "unable to write pjax file.\n");
@@ -62,41 +100,24 @@ int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 		free(html);
 		return 1;
 	}
-	// update webpage setting dirty flag to false.
-	// TODO: this is a major bottle neck as well. and needs to be 
-	// done (in the background (and/or) in batch).
-	// we should be somewhere around 350mb/sec if were sync'n
-	// and up to multiple gigs a second if were not. so this can def
-	// improve. (note: the 1tb spinning hdd is about 120 MB/s)
-	// might be good for a test target.
-	// without sync in write_file & this call were @ 18 MB/s so 
-	// in theory we could 20x that before the disk was stopping us.
-	// that would put us @ 20-40 µs (microseconds) per page
-	// or roughly 25K pages per second.
-	// realistically 5K a secound (200 micros) per page is a realistic goal.
-	// which has us at about 180 MB/s write speed.
-	/*
-	if (webpage_clear_dirty_flag(conn, spec->id)) {
-		fprintf(stderr, "unable to clear dirty flag: page{id=%d}\n",
-				spec->id);
-		free_page_spec(spec);
-		free(json_data);
-		free(html);
-		return 1;
-	} */ 
-	// clear_dirty_flag(spec->id);
-	// add to a queue so that the background thread can process in chunks.
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\twrite_pjax: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
+	// clear_dirty_flag: add to a queue for a background thread to process.
 	pthread_mutex_lock(&(flipper->ctl->mutex));
 	unsigned int *id = malloc(sizeof(*id));
 	*id = spec->id;
 	bqueue_push(flipper->wq, id);
-	//fprintf(stderr, "bqueue_push: %d (%p) size: %lu\n", *id, (void *)id, bqueue_size(flipper->wq));
 	pthread_mutex_unlock(&(flipper->ctl->mutex));
-	//pthread_cond_broadcast(&(flipper->ctl.cond));
+
 	// cleanup
 	free_page_spec(spec);
 	free(json_data);
 	free(html);
+	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
+	fprintf(stderr, "\tcleanup: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
 	return 0;
 }
 

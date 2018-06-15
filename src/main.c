@@ -154,8 +154,6 @@ int main(int argc, char **argv)
 		FD_ZERO(&input_mask);
 		FD_SET(sock, &input_mask);
 
-		//controller_unforce(&state->ctl);
-
 		if (select(sock + 1, &input_mask, NULL, NULL, NULL) < 0) {
 			fprintf(stderr, "select() failed: %s\n", strerror(errno));
 			exit_nicely();
@@ -188,10 +186,8 @@ int main(int argc, char **argv)
 				pthread_cond_broadcast(&state->ctl->cond);
 			}
 		}
-		fprintf(stderr, "broadcast: outside of notify loop\n");
 		controller_force(state->ctl);
 		pthread_cond_signal(&state->ctl->cond);
-		//fprintf(stderr, "broadcast: sent signal \n");
 	}
 	controller_deactivate(state->ctl);
 	pthread_join(tid, NULL);
