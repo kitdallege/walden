@@ -31,11 +31,12 @@ PageSpec *parse_page_spec(const char *payload)
 	spec->id = json_object_get_int(attr);
 	attr = json_object_object_get(obj, "filename");
 	spec->filename = strdup(json_object_get_string(attr));
+
 	attr = json_object_object_get(obj, "path");
 	temp = json_object_get_string(attr);
-	//fprintf(stderr, "page_spec: temp:\"%s\"\n", temp);
 	int offset = temp[4] == '/' ? 5 : 4;
 	spec->path = strdup(temp + offset);
+
 	attr = json_object_object_get(obj, "template");
 	spec->template = mk_abs_path(root_dir, template_dir,
 					json_object_get_string(attr), NULL);

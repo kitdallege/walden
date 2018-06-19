@@ -23,51 +23,37 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/select.h>
-#include <time.h>
 
 #include <libpq-fe.h>
 
 #include "renderer.h"
 #include "flag_flipper.h"
 #include "controller.h"
+#include "log.h"
 
 //#define CONN_INFO "port=5555 dbname=test-db user=kit"
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
-#define LISTEN_CMD "listen dirty_webpage"
+#define LISTEN_CMD_1 "listen dirty_webpage"
+#define LISTEN_CMD_2 "listen dirty_webpages"
+
+#define GET_SPEC_IDS_SQL "select distinct page_spec_id "\
+		"from webpage where dirty = true;"
+
+#define CHUNK_SIZE 2000
+#define GET_DIRTY_SQL  "select p.id, p.name || '.html' as filename, "\
+		"replace(p.parent_path::text, '.', '/') as path, "\
+		"spec.template, spec.query, p.query_params "\
+	"from webpage as p join page_spec as spec on spec.id = p.page_spec_id "\
+	"where p.dirty = true and p.page_spec_id = $1 and id > $2 "\
+	"limit 2000 "\
+	"order by p.page_spec_id, p.taxon_id, p.id;"\
+
+// Global State 
+// TODO: Should live in a struct instance probably.
 static int quit = 0;
 static PGconn *conn;
 static FlagFlipperState *state;
 pthread_t tid;
-typedef struct timespec timespec;
-
-static timespec diff(timespec start, timespec end)
-{
-	timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-	}
-	return temp;
-}
-
-static char* get_formatted_time(void)
-{
-
-    time_t rawtime;
-    struct tm* timeinfo;
-
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-
-    // Must be static, otherwise won't work
-    static char _retval[20];
-    strftime(_retval, sizeof(_retval), "%Y-%m-%d %H:%M:%S", timeinfo);
-
-    return _retval;
-}
 
 static void handle_signal(int signal)
 {
@@ -75,8 +61,6 @@ static void handle_signal(int signal)
 	PQfinish(conn);
 	fprintf(stderr, "size: %lu, force: %d, active: %d : ",
 			bqueue_size(state->wq), state->ctl->force, state->ctl->active);
-	// f'trying to determine its state. just cancel the damn thing and bail.
-	//pthread_cancel(tid);
 	if (state->ctl->force) {
 		fprintf(stderr, "unforcing\n");
 		controller_unforce(state->ctl);
@@ -93,7 +77,6 @@ static void handle_signal(int signal)
 	fprintf(stderr, "calling pthread_join: \n");
 	pthread_join(tid, NULL);
 	fprintf(stderr, "called pthread_join: \n");
-	//free(state);
 	exit(1);
 }
 
@@ -103,49 +86,144 @@ static void exit_nicely(void)
 	exit(1);
 }
 
-int main(int argc, char **argv)
+static int init_postgres(void)
 {
-	const char *conninfo = CONN_INFO; 
 	PGresult *res;
-	PGnotify *notify;
-
-	signal(SIGINT, handle_signal);
+	const char *conninfo = CONN_INFO; 
+	// connect to db	
 	conn = PQconnectdb(conninfo);
-
 	if (PQstatus(conn) != CONNECTION_OK) {
 		fprintf(stderr, "Connection to database failed: %s",
 				PQerrorMessage(conn));
-		exit_nicely();
+		return -1;
 	}
-
-	//res = PQexec(conn, "select pg_catalog.set_config('search_path', 'public', false)");
-	res = PQexec(conn, "set search_path = public"); 
+	// set search_path	
+	res = PQexec(conn, "set search_path = c2v"); 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		fprintf(stderr, "SET failed: %s\n", PQerrorMessage(conn));
+		fprintf(stderr, "set search_path failed: %s\n", PQerrorMessage(conn));
 		PQclear(res);
-		exit_nicely();
+		return -1;
 	}
 	PQclear(res);
-
-	res = PQexec(conn, LISTEN_CMD);
+	// setup listen command's
+	res = PQexec(conn, LISTEN_CMD_1);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		fprintf(stderr, "Listen command failed: %s\n",
+		fprintf(stderr, "listen command failed: %s\n", PQerrorMessage(conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	res = PQexec(conn, LISTEN_CMD_2);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "listen command failed: %s\n", PQerrorMessage(conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	// setup prepared statements
+	res = PQprepare(conn, "get-dirty-spec-ids", GET_SPEC_IDS_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
 				PQerrorMessage(conn));
 		PQclear(res);
-		exit_nicely();
+		return -1;
 	}
 	PQclear(res);
-	
-	/* make our background worker 
-	 * pass in a controller so the thread can be shutdown externally.
-	 */
+	res = PQprepare(conn, "get-dirty-pages", GET_DIRTY_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
+				PQerrorMessage(conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	return 0;
+}
+
+static int init(void)
+{
+	signal(SIGINT, handle_signal); 
+	if (init_postgres()) {
+		fprintf(stderr, "init_postgres failed.\n");
+		return -1;
+	}
+
+	// make background worker for updating diry flags.
 	state = flag_flipper_new();
 	controller_activate(state->ctl);	
 	if (pthread_create(&tid, NULL, webpage_clear_dirty_thread, (void *)state)) {
 		fprintf(stderr, "unable to start worker thread. \n");
-		quit = 1;
+		return -1;
 	}
+	quit = 0;
+	return 0;
+}
 
+static void single_page(PGnotify *notify) 
+{
+	static int count = 0;
+	timespec ct1, ct2, pt1, pt2, td1, td2;
+	clock_gettime(CLOCK_MONOTONIC, &ct1);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
+	if (handle_page(conn, state, notify->extra)) {
+		fprintf(stderr, "handle_page error on: %s \n",
+				notify->extra);
+	} else {
+		clock_gettime(CLOCK_MONOTONIC, &ct2);
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
+		//fprintf(stderr, "updated page: %s \n", notify->extra);
+		td1 = diff(ct1, ct2);
+		td2 = diff(pt1, pt2);
+		fprintf(stderr, "%s system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ",
+				get_formatted_time(),
+				td1.tv_nsec / 1000000.0, td1.tv_nsec,
+				td2.tv_nsec / 1000000.0, td2.tv_nsec); 
+
+	}
+	PQfreemem(notify);
+	if (count++ % 1000 == 0) {
+		//fprintf(stderr, "broadcast: module 1k\n");
+		pthread_cond_broadcast(&state->ctl->cond);
+	}
+}
+
+static void multi_page(PGnotify *notify)
+{
+	const char *params[2];
+	PGresult *res;
+	res = PQexecPrepared(conn, "get-dirty-spec-ids", 0, NULL, NULL, NULL, 0);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
+	}
+	int spec_ids_len = PQntuples(res);
+	char *spec_ids[spec_ids_len];
+	for (int i=0; i < spec_ids_len; i++) {
+		spec_ids[i] = PQgetvalue(res, 0, i);
+	}
+	PQclear(res);
+
+	for (int i = 0; i < spec_ids_len; i++) {
+		params[0] = spec_ids[i];
+		params[1] = "0";
+		bool has_more = true;
+		while (has_more) {
+			res = PQexecPrepared(conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
+			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+				fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
+			}
+			int res_len = PQntuples(res);
+			has_more = res_len == CHUNK_SIZE;
+			// TODO: this becomes a queue write when we go multi-threaded.
+			handle_pages(conn, state, res, atoi(spec_ids[i]));
+			// TODO: figure out column/row
+			params[1] = PQgetvalue(res, 0, 0);
+		}
+	}
+}
+
+static void run_loop(void)
+{
+	PGnotify *notify;
 	while (!quit) {
 		int sock = PQsocket(conn);
 		fd_set input_mask;
@@ -159,40 +237,42 @@ int main(int argc, char **argv)
 			exit_nicely();
 		}
 		PQconsumeInput(conn);
-		int count = 0;
 		while ((notify = PQnotifies(conn))) {
-			//fprintf(stderr, "ASYNC NOTIFY of '%s' received from backend PID %d with a payload of: %s\n", notify->relname, notify->be_pid, notify->extra);
-			timespec ct1, ct2, pt1, pt2, td1, td2;
-			clock_gettime(CLOCK_MONOTONIC, &ct1);
-			clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-			if (handle_page(conn, state, notify->extra)) {
-				fprintf(stderr, "handle_page error on: %s \n",
-						notify->extra);
+			if (strcmp(notify->relname, "webpage_dirty")) {
+				single_page(notify);
+			} else if(strcmp(notify->relname, "webpages_dirty")) {
+				multi_page(notify);
 			} else {
-				clock_gettime(CLOCK_MONOTONIC, &ct2);
-				clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-				//fprintf(stderr, "updated page: %s \n", notify->extra);
-				td1 = diff(ct1, ct2);
-				td2 = diff(pt1, pt2);
-				fprintf(stderr, "%s system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ",
-						get_formatted_time(),
-						td1.tv_nsec / 1000000.0, td1.tv_nsec,
-						td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-
+				fprintf(stderr, "notify unknown relname: %s\n",
+						notify->relname);	
 			}
 			PQfreemem(notify);
-			if (count++ % 1000 == 0) {
-				//fprintf(stderr, "broadcast: module 1k\n");
-				pthread_cond_broadcast(&state->ctl->cond);
-			}
 		}
+		// purge the leftovers out of the queue.
 		controller_force(state->ctl);
 		pthread_cond_signal(&state->ctl->cond);
 	}
+}
+
+static void clean_up(void)
+{
+	fprintf(stderr, "clean_up start.\n");
 	controller_deactivate(state->ctl);
 	pthread_join(tid, NULL);
-	fprintf(stderr, "Done.\n");
+	fprintf(stderr, "pthread_join finished.\n");
 	PQfinish(conn);
+	fprintf(stderr, "clean_up finish.\n");
+}
+
+int main(int argc, char **argv)
+{
+	if (init()) {
+		fprintf(stderr, "init failed!\n");
+		exit_nicely();
+		return 1;
+	}
+	run_loop();
+	clean_up();
 	return 0;
 }
 

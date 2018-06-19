@@ -15,7 +15,7 @@ static void rewrite_query(char **query, const char *params);
  *   and then adds the ');' back
  * TODO: add handling for normal where clauses etc...
  */
-static void rewrite_query(char **query, const char *params)
+void rewrite_query(char **query, const char *params)
 {
 	if (!params || strlen(params) < 1) { return ;}
 	//fprintf(stderr, "rewrite_query: \n q:\"%s\" \np:\"%s\"\n\n", *query, params);

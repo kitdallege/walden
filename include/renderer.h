@@ -4,6 +4,7 @@
 #include <libpq-fe.h>
 #include "flag_flipper.h"
 
+int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *res, int spec_id);
 int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload);
 int write_page(const char *name, const char *path, const char *data);
 int write_pjax(const char *name, const char *path, const char *data);

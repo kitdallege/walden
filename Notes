@@ -142,6 +142,7 @@ Templates JIT
     of code to run that writes to a buffer and spits back a char * to it.
 
 ------------------------
+19708
 total:
 	0.580506 41.671 0.293 11440.6
 
@@ -157,4 +158,121 @@ write_page: avg max min total
 	0.0888526 31.154 0.057 1751.11
 write_pjax: avg max min total
 	0.0843485 0.367 0.058 1662.34
+
+----------------------------
+parse_page_spec     0.0078528 0.081 0.006 154.763
+file_exists         0.00313304 0.092 0.002 61.746
+get_query_result    0.268192 25.793 0.093 5285.53
+render_template     0.0802086 4.117 0.043 1580.75
+write_page          0.0865323 42.156 0.058 1705.38
+write_pjax          0.0838798 20.904 0.059 1653.1
+cleanup             0.00173214 0.022 0.001 34.137
+                    0.5645 46.190 0.294 11125.2 19708 count
+
+----------------------------
+self blabbing
+
+
+So the #'s are telling me that:
+  * quries are by far the most expensive
+  ** The easist to vectorize (detail view) also happens to 98% of the 
+     webpages.   
+c2v=> select count(*) from webpage where page_spec_id != 5;                                                                                                                                  
+ count
+-------
+   351
+(1 row)
+
+c2v=> select count(*) from webpage where page_spec_id = 5;                                                                                                                                   
+ count
+-------
+ 19357
+(1 row)
+
+So lets pluck that long hanging fruit first.
+
+* trigger needs changed to fire once per statement
+* main needs to query changed rows (async ? / maybe a todo after serial).
+* processing function needs to take 'rows' to work on.
+	* if query allows vectorization (cheat hard code for now)
+	  then need to build out query args.
+	  ** future: either this is an attribute of a 'query' in the system
+	     or a constraint that all queries.sql must allow where clause
+		 munging. *TBD*
+
+		 I def lean towards vectorized by default. And you use views to 
+		 wrap any crazy logic, or CTE's. This allows you to still use
+		 functions, your just calling them on all the rows returned, and then
+		 letting the 'shit @ the end of the query' determine how big of a 
+		 results-set that is.
+
+
+--- 
+once i get that, then its just a matter of taking that processing function
+and converting it to working off a queue/controller instead of by invoke.
+
+Then i can thread it out and see how well it scales in the face of
+parallelization.
+
+??? need to think about 'below', as were typically wanting to work on a 
+full 'struct' worth of shit per iteration. So as long as the struct isn't
+all padded out wrong, in theory it should work 'as well' as an AOS as a SOA..
+
+[TODO: rework to be a SOA instead of AOS. There is no reason not to 
+vectorize the code as most of what were doing is operating sequentially over
+an array of spec's.. Its not that far off to just have an 'array' per 
+attribute, and store shit contigiously in them.]
+
+PageSpec
+could pre-allocate 'blocks' of PageSpec(s)
+struct PageSpecBlock {
+	size_t len;
+	PageSpec specs[MAX_BLK_SIZE];
+}
+static PageSpecBlock spec_block_pool[POOL_SIZE];
+
+then @ main webpage results level we just worry about filling a block 
+when one is avl (and shoving it into the queue in the future).
+
+This removes all the 'block' allocations & pagespec allocations, converting
+them into essentially an O(1) from an O(n)..
+
+Could hold more information in the block, eg: if all webpage.page_spec_id's are
+the same, than we can load the query/template once and reuse it for 'every'
+item.
+
+'more than that': if all page_spec_id's are the same then we know that all
+template/queries are the same, thus we don't need to parse them on a O(n) 
+basis.
+
+
+---
+Memory arena - or learning to live without malloc...
+
+It might be nice to remove as many calls to malloc as possible and just do
+the 'alloc an arena' up front. There will still be malloc's from the 
+json lib, as well as postgres, but one could elimitate a lot of memory
+churn as well as a whole class of bugs. Also typically carving up a large
+block of memory results in you being able to pack shit the way you want
+it to be.
+
+mustache - could benefit from this as well, as it does a fair mount of 
+memory allocation during parse/render. It'd be far easier to just take
+a chunk of memory and 'use it' and then when your done free the single 
+chunk, instead of a ton of malloc/free's....
+
+
+----
+There is no way to side step PGresult using malloc. So need to make use
+of the memory it does alloc as much as possible (eg: avoid copy/dup).
+
+need a way to determine all the 'chunks of' PGresults are finished processing
+before we free it.
+
+How about if we just 'query' such that the PGresults are 'our' chunks.
+
+ideally each block 'results set' contains a single 'page_spec_id' such that
+we can optimize the lookups without having to sniff every iteraction for 
+change.
+
 

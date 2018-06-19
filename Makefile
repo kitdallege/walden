@@ -11,7 +11,10 @@ INSTALL_DIR=$(PREFIX)/bin
 CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wno-unused-function 
 CFLAGS  += -I. -I./include -I`pg_config --includedir`
-CFLAGS  += `pkg-config json-c --cflags` -I../mustach -I $(wildcard ./deps/*)
+CFLAGS  += `pkg-config json-c --cflags`
+#TODO: move mustache to ./deps/ 
+CFLAGS  += -I../mustach -I $(wildcard ./deps/*)
+#TODO: it'd be nice to drop the gnu and use std c11 (fchown vs. chown .. etc).
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 
 LDFLAGS = $(shell pkg-config libpq json-c --libs)

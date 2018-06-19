@@ -3,6 +3,7 @@
 #include <libgen.h>
 #include <pthread.h>
 
+#include "log.h"
 #include "templates.h"
 #include "page_spec.h"
 #include "files.h"
@@ -10,23 +11,126 @@
 #include "renderer.h"
 
 static char root_dir[] = "/var/html/c2v";
+static char template_dir[] = "templates";
 static char web_dir[] = "www";
-
-typedef struct timespec timespec;
-
-static timespec diff(timespec start, timespec end)
+static char query_dir[] = "queries";
+/*
+#define GET_DIRTY_SQL  "
+select
+	p.id,
+	p.name || '.html' as filename, 
+	"replace(p.parent_path::text, '.', '/') as path, 
+	"spec.template,
+	spec.query,
+	p.query_params "\
+ */
+static bool is_scalar(int page_spec_id)
 {
-	timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	bool ret = false;
+	switch (page_spec_id) {
+		case 5: {
+		   	ret = false;
+			break;
+		}
+		default: {
+			ret = true;
+			break;
+		 }
 	}
-	return temp;
+	return ret;
 }
 
+int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results, int spec_id)
+{
+	// load up template_file
+	char *template_path = mk_abs_path(root_dir, template_dir, PQgetvalue(results, 0, 3), NULL);
+	char *template_data = read_file(template_path);
+	if (!template_data) {
+		fprintf(stderr, "Unable to read template: %s\n", template_path);
+		free(template_path);
+		return -1;
+	}
+	free(template_path);
+	// load up query_file
+	char *query_path = mk_abs_path(root_dir, query_dir, PQgetvalue(results, 0, 4), NULL);
+	char *query_file = read_file(query_path);
+	if (!query_file) {
+		fprintf(stderr, "Unable to load query: %s\n", query_path);
+		free(query_path);
+		return -1;
+	}
+	free(query_path);
+	// render out pages
+	PGresult *res;
+	int results_len = PQntuples(results);
+	if (is_scalar(spec_id)) {
+		// query per page.
+		for (int i = 0; i < results_len; i++) {
+			char *params = PQgetvalue(results, i, 5);
+			char *cmd = strdup(query_file);
+			rewrite_query(&cmd, params);
+			res = PQexec(conn, cmd);
+			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+				fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(conn));
+				PQclear(res);
+				free(cmd);
+				return 1;
+			}
+			free(cmd);
+			char *context_data = PQgetvalue(res, 0, 0);
+			PQclear(res);
+			char *html = render_template_str(template_data, context_data);
+			//write files
+			const char *filename = PQgetvalue(results, i, 2);
+			char *path = PQgetvalue(results, i, 3);
+			// walk path forward past the first dir.
+			if (write_page(filename, path, html)) {
+				fprintf(stderr, "unable to write html file.\n");
+				free(context_data);
+				free(html);
+				return 1;
+			}
+			if (write_pjax(filename, path, html)) {
+				fprintf(stderr, "unable to write pjax file.\n");
+				free(context_data);
+				free(html);
+				return 1;
+			}
+		}
+	} else {
+		// 1 query for all pages.
+		char *args; // = get_combined_args(results)
+		res = PQexec(conn, cmd);
+		// hopefully len(res) == len(results)
+		// also hopefully there in the same order so 
+		// matching them is just walking array index over both res/results
+		// TODO: make order by an enforced constraint. it allows us to 
+		// burn though arrays here instead of doing an O(n*m) join
+		for (int i = 0; i < results_len; i++) {
+			char *json_data = PQgetvalue(res, i, 0);
+			html = render_template_str(template_data, json_data);
+			//write files
+			const char *filename = PQgetvalue(results, i, 2);
+			char *path = PQgetvalue(results, i, 3);
+			// walk path forward past the first dir.
+			if (write_page(filename, path, html)) {
+				fprintf(stderr, "unable to write html file.\n");
+				free(context_data);
+				free(html);
+				return 1;
+			}
+			if (write_pjax(filename, path, html)) {
+				fprintf(stderr, "unable to write pjax file.\n");
+				free(context_data);
+				free(html);
+				return 1;
+			}
+		}
+	}
+	write_page_ids_to_clean_queue();
+	PQclear(results);
+	return 0;
+}
 
 int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
 {

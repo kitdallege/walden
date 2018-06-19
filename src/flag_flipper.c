@@ -63,7 +63,7 @@ void *webpage_clear_dirty_thread(void *arg)
 	}
 	fprintf(stderr, "Set search_path = public \n");
 	PQclear(res);
-	// TODO: setup prepared statement
+	// setup prepared statement
 	res = PQprepare(conn, "flip-flag",
 		"update webpage set date_updated = default, dirty = false where id = ANY($1);",
 		1, NULL);
@@ -106,7 +106,6 @@ void *webpage_clear_dirty_thread(void *arg)
 		fprintf(stderr, "ids: %s\n", vals[0]);
 		fprintf(stderr, "updating %u page(s).\n", count);
 		res = PQexecPrepared(conn, "flip-flag", 1, vals, NULL, NULL, 0);
-		//res = PQexec(conn, cmd);
 		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 			fprintf(stderr, "webpage_clear_dirty_flag failed: %s\n", PQerrorMessage(conn));
 		}
