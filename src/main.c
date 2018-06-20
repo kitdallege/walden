@@ -33,8 +33,8 @@
 
 //#define CONN_INFO "port=5555 dbname=test-db user=kit"
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
-#define LISTEN_CMD_1 "listen dirty_webpage"
-#define LISTEN_CMD_2 "listen dirty_webpages"
+#define LISTEN_CMD_1 "listen webpage_dirty"
+#define LISTEN_CMD_2 "listen webpages_dirty"
 
 #define GET_SPEC_IDS_SQL "select distinct page_spec_id "\
 		"from webpage where dirty = true;"
@@ -44,9 +44,9 @@
 		"replace(p.parent_path::text, '.', '/') as path, "\
 		"spec.template, spec.query, p.query_params "\
 	"from webpage as p join page_spec as spec on spec.id = p.page_spec_id "\
-	"where p.dirty = true and p.page_spec_id = $1 and id > $2 "\
-	"limit 2000 "\
-	"order by p.page_spec_id, p.taxon_id, p.id;"\
+	"where p.dirty = true and p.page_spec_id = $1 and p.id > $2 "\
+	"order by p.page_spec_id, p.taxon_id, p.id "\
+	"limit 2000; "\
 
 // Global State 
 // TODO: Should live in a struct instance probably.
@@ -59,18 +59,9 @@ static void handle_signal(int signal)
 {
 	fprintf(stderr, "\n Caught Signal: %d \n", signal);
 	PQfinish(conn);
-	fprintf(stderr, "size: %lu, force: %d, active: %d : ",
-			bqueue_size(state->wq), state->ctl->force, state->ctl->active);
-	if (state->ctl->force) {
-		fprintf(stderr, "unforcing\n");
-		controller_unforce(state->ctl);
-		fprintf(stderr, "unforced");
-	} else {
-		fprintf(stderr, "controller_force \n");
-		controller_force(state->ctl);
-		fprintf(stderr, "controller_forced \n");
-		pthread_cond_signal(&(state->ctl->cond));
-	}
+	fprintf(stderr, "size: %lu, active: %d : ",
+			bqueue_size(state->wq), state->ctl->active);
+	pthread_cond_signal(&(state->ctl->cond));
 	fprintf(stderr, "calling controller_deactivate: \n");
 	controller_deactivate(state->ctl);
 	fprintf(stderr, "called controller_deactivate: \n");
@@ -161,7 +152,6 @@ static int init(void)
 
 static void single_page(PGnotify *notify) 
 {
-	static int count = 0;
 	timespec ct1, ct2, pt1, pt2, td1, td2;
 	clock_gettime(CLOCK_MONOTONIC, &ct1);
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
@@ -181,10 +171,7 @@ static void single_page(PGnotify *notify)
 
 	}
 	PQfreemem(notify);
-	if (count++ % 1000 == 0) {
-		//fprintf(stderr, "broadcast: module 1k\n");
-		pthread_cond_broadcast(&state->ctl->cond);
-	}
+	pthread_cond_broadcast(&state->ctl->cond);
 }
 
 static void multi_page(PGnotify *notify)
@@ -192,32 +179,34 @@ static void multi_page(PGnotify *notify)
 	const char *params[2];
 	PGresult *res;
 	res = PQexecPrepared(conn, "get-dirty-spec-ids", 0, NULL, NULL, NULL, 0);
-	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
 	}
 	int spec_ids_len = PQntuples(res);
 	char *spec_ids[spec_ids_len];
 	for (int i=0; i < spec_ids_len; i++) {
-		spec_ids[i] = PQgetvalue(res, 0, i);
+		spec_ids[i] = PQgetvalue(res, i, 0);
 	}
-	PQclear(res);
 
 	for (int i = 0; i < spec_ids_len; i++) {
+		int res_cnt = 0;
 		params[0] = spec_ids[i];
 		params[1] = "0";
 		bool has_more = true;
 		while (has_more) {
-			res = PQexecPrepared(conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
-			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+			PGresult *res2 = PQexecPrepared(conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
+			if (PQresultStatus(res2) != PGRES_TUPLES_OK) {
 				fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
 			}
-			int res_len = PQntuples(res);
+			int res_len = PQntuples(res2);
+			res_cnt += res_len;
 			has_more = res_len == CHUNK_SIZE;
 			// TODO: this becomes a queue write when we go multi-threaded.
-			handle_pages(conn, state, res, atoi(spec_ids[i]));
+			handle_pages(conn, state, res2, atoi(spec_ids[i]));
 			// TODO: figure out column/row
-			params[1] = PQgetvalue(res, 0, 0);
+			params[1] = PQgetvalue(res2, res_cnt, 0);
 		}
+	PQclear(res);
 	}
 }
 
@@ -238,9 +227,10 @@ static void run_loop(void)
 		}
 		PQconsumeInput(conn);
 		while ((notify = PQnotifies(conn))) {
-			if (strcmp(notify->relname, "webpage_dirty")) {
+			fprintf(stderr, "notification: relname: %s \n", notify->relname);
+			if (!strcmp(notify->relname, "webpage_dirty")) {
 				single_page(notify);
-			} else if(strcmp(notify->relname, "webpages_dirty")) {
+			} else if(!strcmp(notify->relname, "webpages_dirty")) {
 				multi_page(notify);
 			} else {
 				fprintf(stderr, "notify unknown relname: %s\n",
@@ -249,7 +239,6 @@ static void run_loop(void)
 			PQfreemem(notify);
 		}
 		// purge the leftovers out of the queue.
-		controller_force(state->ctl);
 		pthread_cond_signal(&state->ctl->cond);
 	}
 }

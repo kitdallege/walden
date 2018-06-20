@@ -5,7 +5,6 @@ typedef struct Controller {
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	int active;
-	int force;
 } Controller;
 
 int controller_init(Controller *c);

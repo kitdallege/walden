@@ -276,3 +276,92 @@ we can optimize the lookups without having to sniff every iteraction for
 change.
 
 
+---
+stuff from the detail query
+
+
+/*
+ nav could be factored out as a 'pre-rendered' widget saving us having to
+ replicate in each result.
+
+ globals too, seem like something that should be 'by convention/default'
+ eg: i want it in the context for the page, but i dont' want to have to bloat
+     my 'per-item' with it since its global to 'all pages'.
+
+At iter8 level it'd be a data/globals.json type of convention. maybe we can
+make it such that its the same logic. /queries/globals.sql
+
+The 'query' in 'globals.sql' returns a 'jsonb' object, which we use as
+global context vars for the site.
+
+--- ponders a bit....
+
+> v2 idea before/leading to the blab up ^
+  v1 is:  select webpage_context_item_detail();
+with nav as (
+		select data from config where config.name = 'nav'
+	),
+	items as (
+		select row_to_json(object.*) from object
+	)
+	select (jsonb_build_object(
+		'nav', (select data from config where config.name = 'nav'),
+		'item', (select row_to_json(object.*) from object where id = v_id)
+		) || (select data from config where name = 'context_globals'));
+
+-- so this become it. the where id shit gets added by the code.
+-- as does the globals.
+select row_to_json(object.*) from object
+-- and the nav requierments are pushed 'out' to the template/pre-render
+-- include..
+
+
+-- hmm's some more... (got to think about other views in this schematic).
+so the next question is how to tie the context-per-page to the webpage/page_spec.
+
+it almost has to be such that ya need to have a pre-defined 'key' column
+which is the same as the 'query_params' is using.
+
+most of the time its the pk..
+
+since thats my common case thats what we'll dev first.
+it reminds me of the get_in_bulk API from django
+ instead of worrying about order we want to re-assoicate the results with the
+ webpage that it belongs to via its 'query_params'.
+
+With 'get_in_bulk' types, we could pull the pk = # into a single
+pk = ANY({}), which is a fair amount faster (single index only scan) vs. a
+bitmap index can per 'or(d)' condition. .
+
+
+Its between this and having an 'object_taxon' which would allow us to pull
+though taxons into webpages.
+
+I dislike having the db bound like that, and would rather it be free-er
+with just a way to denote how to 'treate a page_spec/taxon' @
+renderer level..
+
+Eg: ya have index, list, detail view types.
+    even if we support different behavior specialized for each, its not that
+    bad, for the tradeoff of keeping the interface into it light/simple.
+
+I don't foresee writing a lot of taxon-types, its one of those things where
+ya can only aggregate data in so many ways, most of which can be made to fit
+a normalized API just by virtue of postgres CTE/Views.
+
+
+So I'm not ANTI specialized solutions per type vs generalized solution for all.
+
+atm the generalized solution is causing me to run 19K queries where 1 would
+do.
+
+0.o
+
+create type taxon_type as enum ('index', 'detail', 'list-by-occurrence_date');
+
+so i can switch based on 'taxon type' and slowly introduce vectorization.
+
+
+
+*/
+

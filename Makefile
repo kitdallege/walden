@@ -13,7 +13,7 @@ CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wno-unused-function
 CFLAGS  += -I. -I./include -I`pg_config --includedir`
 CFLAGS  += `pkg-config json-c --cflags`
 #TODO: move mustache to ./deps/ 
-CFLAGS  += -I../mustach -I $(wildcard ./deps/*)
+CFLAGS  += -I../mustach -I./deps/bqueue
 #TODO: it'd be nice to drop the gnu and use std c11 (fchown vs. chown .. etc).
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 

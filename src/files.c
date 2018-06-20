@@ -57,13 +57,13 @@ char *mk_abs_path(char *base, ...)
         va_start(args, base);
         str = (char *)base;
         for (unsigned int i = 0; i < count; i++) {
-                s_len = strlen(str);
-		if (s_len) {
-			if (i) { *p++ = '/'; }
-			memcpy(p, str, s_len);
-			p += s_len;
-		}
-                str = va_arg(args, char *);
+			s_len = strlen(str);
+			if (s_len) {
+				if (i) { *p++ = '/'; }
+				memcpy(p, str, s_len);
+				p += s_len;
+			}
+			str = va_arg(args, char *);
         }
         va_end(args);
         *p = '\0';

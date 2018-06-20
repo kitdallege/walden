@@ -1,0 +1,50 @@
+This is a simple hash table implementation written in plain old C.  The goal
+is for this code to be reusable in many of the projects I've worked on that
+could use something better than a poorly-tuned chaining implementation.
+
+A variant is included which is just a set -- hash and key, not hash, key, and
+data.
+
+The intention is that users of this code copy it directly into their
+repositories, as it's quite small and should see very little development.
+
+The summary of this implementation would be that it uses open addressing
+with rehashing.  The table stores for each entry:
+
+ * uint32_t hash of the key.
+ * pointer to the key.
+ * pointer to the data.
+
+Inserts occur at key->hash % hash->size.  When an insert collides, the insert
+steps through the table using the reprobe stride until a free or dead entry is
+found.  When an insert occurs with a key matching a key already in the table,
+the new data is associated with the key.  Note that old key/data is not freed,
+so if memory management is required, do a search before insert.
+
+When searching, the search starts at key % hash_size and continues at
+increments of reprobe as with inserts, until the matching entry or an
+unallocated entry is found.
+
+When deleting an entry, the entry is marked deleted.
+
+Performance considerations:
+
+ * Only an extra 10% free entries is given at any table size.
+
+	This means that as entries are added, the performance of insertion and
+	lookups will degrade as one approaches maximum entries until the table
+	gets resized.  Unless an outside entry manager results in a maximum
+	number of entries close to the hash table's current size limit, this
+	shouldn't be a concern.
+
+ * Repeated deletions fill the table with deleted entry markers.
+
+	This means that a table that was filled, then emptied, will have
+	performance for unsuccessful searches in O(hash->size)
+
+	This is worked around in practice by later inserts into a hash table
+	with many deletes in it triggering a rehash at the current size.
+
+In addition to the core hash_table implementation, a sample of the FNV-1a
+32-bit hash function is included for convenience for those that don't wish
+to analyze hash functions on their own.

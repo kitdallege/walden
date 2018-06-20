@@ -11,9 +11,15 @@ typedef struct FlagFlipperState {
 	BQueue *wq;
 } FlagFlipperState;
 
+typedef struct PageIdArray {
+	unsigned int *data;
+	size_t len;
+} PageIdArray;
+
 FlagFlipperState *flag_flipper_new(void);
 void *webpage_clear_dirty_thread(void *arg);
 int webpage_clear_dirty_flag(PGconn *conn, int id);
 
+PageIdArray *page_id_array_create(size_t len);
 #endif
 

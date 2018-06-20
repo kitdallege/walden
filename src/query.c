@@ -4,7 +4,7 @@
 #include "files.h"
 #include "query.h"
 
-static void rewrite_query(char **query, const char *params);
+void rewrite_query(char **query, const char *params);
 
 /* munges query string to append params.
  * how:

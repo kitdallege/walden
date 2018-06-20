@@ -3,10 +3,14 @@
 #include <libgen.h>
 #include <pthread.h>
 
+#include "deps/hash_table/hash_table.h"
+#include "deps/hash_table/fnv_hash.h"
+
 #include "log.h"
 #include "templates.h"
 #include "page_spec.h"
 #include "files.h"
+#include "flag_flipper.h"
 #include "query.h"
 #include "renderer.h"
 
@@ -40,6 +44,138 @@ static bool is_scalar(int page_spec_id)
 	return ret;
 }
 
+static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
+		PGresult *results, int results_len, int spec_id, char *template_data,
+		char *query_file)
+{
+	// query per page.
+	PGresult *res;
+	PageIdArray *page_ids = page_id_array_create(results_len);
+
+	for (int i = 0; i < results_len; i++) {
+		page_ids->data[i] = atoi(PQgetvalue(results, i, 0));
+		char *cmd = strdup(query_file); // TODO: reuse a buffer instead of dup'n
+		char *params = PQgetvalue(results, i, 5);
+		rewrite_query(&cmd, params);
+		res = PQexec(conn, cmd);
+		if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+			fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(conn));
+			PQclear(res);
+			free(cmd);
+			return 1;
+		}
+		free(cmd);
+		char *context_data = PQgetvalue(res, 0, 0);
+		char *html = render_template_str(template_data, context_data);
+		//write files
+		const char *filename = PQgetvalue(results, i, 2);
+		char *path = PQgetvalue(results, i, 3);
+		// walk path forward past the first dir.
+		if (write_page(filename, path, html)) {
+			fprintf(stderr, "unable to write html file.\n");
+			PQclear(res);
+			free(html);
+			return 1;
+		}
+		if (write_pjax(filename, path, html)) {
+			fprintf(stderr, "unable to write pjax file.\n");
+			PQclear(res);
+			free(html);
+			return 1;
+		}
+	}
+	PQclear(res);
+	pthread_mutex_lock(&(flipper->ctl->mutex));
+	// TODO: use a struct so we can store len along side the ids
+	bqueue_push(flipper->wq, &page_ids);
+	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	return 0;
+}
+
+int augment_query(char **query_file, char **query_params, int params_len);
+int augment_query(char **query_file, char **query_params, int params_len)
+{
+	int param_len = 0;
+	size_t temp_size = sizeof(char *) * (params_len * 40);
+	char *bp,  *temp;
+    bp = temp = malloc(temp_size);
+	strcpy(temp, " WHERE id = ANY('{");
+	temp += 18;
+	for (int i = 0; i < params_len; i++) {
+		char *str = query_params[i];
+		param_len = strlen(str);
+		if (i) { *temp++ = ',';}
+		strcat(temp, query_params[i]);
+		temp +=  param_len;
+	}
+	strcpy(temp, "}')");
+	*query_file = realloc(*query_file, strlen(*query_file) + temp_size + 4);
+	// need to rip off everything to & including ';'
+	// add where clause with ;
+	char *semi = *query_file + strlen(*query_file) - 1;
+	for(;*semi != ';'; semi--){};	
+	*semi = '\0';
+	strcat(*query_file, bp);
+	strcat(*query_file, ";");
+	return 0;
+}
+
+
+
+static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
+		PGresult *results, int results_len, int spec_id, char *template_data,
+		char **query_file)
+{
+	// 1 query for all pages.
+	PGresult *res;
+	char *query_param;
+	char *query_params[results_len];
+	int row_ids[results_len];
+	int page_ids[results_len];
+	struct hash_table *ptable;
+	ptable = hash_table_create_for_string();
+	for (int i = 0; i < results_len; i++) {
+		query_param = PQgetvalue(results, i, 5);	
+		query_params[i] = query_param;
+		row_ids[i] = i;
+		hash_table_insert(ptable, query_param, &row_ids[i]);
+		page_ids[i] = atoi(PQgetvalue(results, i, 0));
+	}
+	augment_query(query_file, query_params, results_len);
+	res = PQexec(conn, *query_file);
+	fprintf(stderr, "vectorized query returned %d rows. \n", PQntuples(res));
+	struct hash_entry *item;	
+	// check: len(res) == len(results)
+	for (int i = 0; i < results_len; i++) {
+		char *json_data = PQgetvalue(res, i, 0);
+		char *html = render_template_str(template_data, json_data);
+		//write files
+		// TODO: figure out pk column and context column
+		item = NULL;
+		item = hash_table_search(ptable, PQgetvalue(res, i, 1));
+		int row_idx = *(int *)item->data; 
+		const char *filename = PQgetvalue(results, row_idx, 2);
+		char *path = PQgetvalue(results, row_idx, 3);
+		// walk path forward past the first dir.
+		if (write_page(filename, path, html)) {
+			fprintf(stderr, "unable to write html file.\n");
+			free(json_data);
+			free(html);
+			return 1;
+		}
+		if (write_pjax(filename, path, html)) {
+			fprintf(stderr, "unable to write pjax file.\n");
+			free(json_data);
+			free(html);
+			return 1;
+		}
+	}
+	pthread_mutex_lock(&(flipper->ctl->mutex));
+	bqueue_push(flipper->wq, &page_ids);
+	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	return 0;
+}
+
 int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results, int spec_id)
 {
 	// load up template_file
@@ -61,73 +197,18 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results, int
 	}
 	free(query_path);
 	// render out pages
-	PGresult *res;
 	int results_len = PQntuples(results);
 	if (is_scalar(spec_id)) {
-		// query per page.
-		for (int i = 0; i < results_len; i++) {
-			char *params = PQgetvalue(results, i, 5);
-			char *cmd = strdup(query_file);
-			rewrite_query(&cmd, params);
-			res = PQexec(conn, cmd);
-			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-				fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(conn));
-				PQclear(res);
-				free(cmd);
-				return 1;
-			}
-			free(cmd);
-			char *context_data = PQgetvalue(res, 0, 0);
-			PQclear(res);
-			char *html = render_template_str(template_data, context_data);
-			//write files
-			const char *filename = PQgetvalue(results, i, 2);
-			char *path = PQgetvalue(results, i, 3);
-			// walk path forward past the first dir.
-			if (write_page(filename, path, html)) {
-				fprintf(stderr, "unable to write html file.\n");
-				free(context_data);
-				free(html);
-				return 1;
-			}
-			if (write_pjax(filename, path, html)) {
-				fprintf(stderr, "unable to write pjax file.\n");
-				free(context_data);
-				free(html);
-				return 1;
-			}
-		}
+		handle_pages_scalar(
+			conn, flipper, results, results_len, spec_id,
+			template_data, query_file
+		);
 	} else {
-		// 1 query for all pages.
-		char *args; // = get_combined_args(results)
-		res = PQexec(conn, cmd);
-		// hopefully len(res) == len(results)
-		// also hopefully there in the same order so 
-		// matching them is just walking array index over both res/results
-		// TODO: make order by an enforced constraint. it allows us to 
-		// burn though arrays here instead of doing an O(n*m) join
-		for (int i = 0; i < results_len; i++) {
-			char *json_data = PQgetvalue(res, i, 0);
-			html = render_template_str(template_data, json_data);
-			//write files
-			const char *filename = PQgetvalue(results, i, 2);
-			char *path = PQgetvalue(results, i, 3);
-			// walk path forward past the first dir.
-			if (write_page(filename, path, html)) {
-				fprintf(stderr, "unable to write html file.\n");
-				free(context_data);
-				free(html);
-				return 1;
-			}
-			if (write_pjax(filename, path, html)) {
-				fprintf(stderr, "unable to write pjax file.\n");
-				free(context_data);
-				free(html);
-				return 1;
-			}
-		}
+		handle_pages_vector(
+			conn, flipper, results, results_len, spec_id,
+			template_data, &query_file
+		);
 	}
-	write_page_ids_to_clean_queue();
 	PQclear(results);
 	return 0;
 }
