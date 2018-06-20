@@ -48,12 +48,14 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char *query_file)
 {
+	//fprintf(stderr, "START handle_pages_scalar \n");
 	// query per page.
 	PGresult *res;
 	PageIdArray *page_ids = page_id_array_create(results_len);
 
 	for (int i = 0; i < results_len; i++) {
 		page_ids->data[i] = atoi(PQgetvalue(results, i, 0));
+		page_ids->len++;
 		char *cmd = strdup(query_file); // TODO: reuse a buffer instead of dup'n
 		char *params = PQgetvalue(results, i, 5);
 		rewrite_query(&cmd, params);
@@ -68,9 +70,11 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		char *context_data = PQgetvalue(res, 0, 0);
 		char *html = render_template_str(template_data, context_data);
 		//write files
-		const char *filename = PQgetvalue(results, i, 2);
-		char *path = PQgetvalue(results, i, 3);
+		const char *filename = PQgetvalue(results, i, 1);
+		char *path = PQgetvalue(results, i, 2);
+		// path needs to drop the / and be joined with the real web_root
 		// walk path forward past the first dir.
+		path += 4;
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file.\n");
 			PQclear(res);
@@ -87,8 +91,9 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 	PQclear(res);
 	pthread_mutex_lock(&(flipper->ctl->mutex));
 	// TODO: use a struct so we can store len along side the ids
-	bqueue_push(flipper->wq, &page_ids);
+	bqueue_push(flipper->wq, page_ids);
 	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	//fprintf(stderr, "END handle_pages_scalar \n");
 	return 0;
 }
 
@@ -99,6 +104,9 @@ int augment_query(char **query_file, char **query_params, int params_len)
 	size_t temp_size = sizeof(char *) * (params_len * 40);
 	char *bp,  *temp;
     bp = temp = malloc(temp_size);
+	// TODO: figure out why garbage memory is blowing this up..
+	// would be nice to nix the memset.
+	memset(bp, 0, temp_size);
 	strcpy(temp, " WHERE id = ANY('{");
 	temp += 18;
 	for (int i = 0; i < params_len; i++) {
@@ -109,6 +117,9 @@ int augment_query(char **query_file, char **query_params, int params_len)
 		temp +=  param_len;
 	}
 	strcpy(temp, "}')");
+	temp += 3;
+	*temp = '\0';
+	//fprintf(stderr, "in augment: bp: %s\n", bp);
 	*query_file = realloc(*query_file, strlen(*query_file) + temp_size + 4);
 	// need to rip off everything to & including ';'
 	// add where clause with ;
@@ -117,6 +128,7 @@ int augment_query(char **query_file, char **query_params, int params_len)
 	*semi = '\0';
 	strcat(*query_file, bp);
 	strcat(*query_file, ";");
+	//fprintf(stderr, "in augment: query_file: %s\n", *query_file);
 	return 0;
 }
 
@@ -126,36 +138,54 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char **query_file)
 {
+	//fprintf(stderr, "START handle_pages_vector \n");
+	if (!results_len) { return 0; }
 	// 1 query for all pages.
 	PGresult *res;
 	char *query_param;
 	char *query_params[results_len];
 	int row_ids[results_len];
-	int page_ids[results_len];
+	//int page_ids[results_len];
+	PageIdArray *page_ids = page_id_array_create(results_len);
 	struct hash_table *ptable;
 	ptable = hash_table_create_for_string();
 	for (int i = 0; i < results_len; i++) {
 		query_param = PQgetvalue(results, i, 5);	
 		query_params[i] = query_param;
 		row_ids[i] = i;
+		//fprintf(stderr, "hash_table_insert: %s\n", query_param);
 		hash_table_insert(ptable, query_param, &row_ids[i]);
-		page_ids[i] = atoi(PQgetvalue(results, i, 0));
+		unsigned int pk = atoi(PQgetvalue(results, i, 0));
+		//fprintf(stderr, "page_ids->data[i] = %d\n", pk);
+		page_ids->data[i] = pk; page_ids->len++;
 	}
+	//fprintf(stderr, "query_file: %s\n", *query_file);
 	augment_query(query_file, query_params, results_len);
 	res = PQexec(conn, *query_file);
-	fprintf(stderr, "vectorized query returned %d rows. \n", PQntuples(res));
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		fprintf(stderr, "error with query: %s error:%s\n", *query_file,
+				PQerrorMessage(conn));
+		return 0;
+	}
+	//fprintf(stderr, "vectorized query returned %d rows. \n", PQntuples(res));
+	if (!PQntuples(res)) { return 0;}
 	struct hash_entry *item;	
 	// check: len(res) == len(results)
 	for (int i = 0; i < results_len; i++) {
-		char *json_data = PQgetvalue(res, i, 0);
+		char *json_data = PQgetvalue(res, i, 1);
+		// TODO: Missing CWD: so the template fails.
 		char *html = render_template_str(template_data, json_data);
 		//write files
 		// TODO: figure out pk column and context column
 		item = NULL;
-		item = hash_table_search(ptable, PQgetvalue(res, i, 1));
+		item = hash_table_search(ptable, PQgetvalue(res, i, 0));
+		if (!item) {
+			fprintf(stderr, "unable to find item for: %s\n", PQgetvalue(res, i, 0));
+		}
 		int row_idx = *(int *)item->data; 
-		const char *filename = PQgetvalue(results, row_idx, 2);
-		char *path = PQgetvalue(results, row_idx, 3);
+		const char *filename = PQgetvalue(results, row_idx, 1);
+		char *path = PQgetvalue(results, row_idx, 2);
+		path += 4;
 		// walk path forward past the first dir.
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file.\n");
@@ -171,8 +201,10 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		}
 	}
 	pthread_mutex_lock(&(flipper->ctl->mutex));
-	bqueue_push(flipper->wq, &page_ids);
+	bqueue_push(flipper->wq, page_ids);
+	pthread_cond_broadcast(&(flipper->ctl->cond));
 	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	//fprintf(stderr, "END handle_pages_vector \n");
 	return 0;
 }
 

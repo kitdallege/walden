@@ -34,6 +34,8 @@ char *render_template_str(const char *template_data, const char *json_data)
 		fprintf(stderr, "Unabled to parse json_data. %s\n", json_data);
 		return NULL;
 	}
+	json_object *cwd = json_object_new_string("/var/html/c2v/templates");
+	json_object_object_add(obj, "CWD", cwd);
 	char *result;
 	size_t result_size;
 	// TODO: pass in memstream (open/close) in caller.

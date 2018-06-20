@@ -12,8 +12,8 @@ typedef struct FlagFlipperState {
 } FlagFlipperState;
 
 typedef struct PageIdArray {
-	unsigned int *data;
 	size_t len;
+	unsigned int data[];
 } PageIdArray;
 
 FlagFlipperState *flag_flipper_new(void);

@@ -176,6 +176,7 @@ static void single_page(PGnotify *notify)
 
 static void multi_page(PGnotify *notify)
 {
+	fprintf(stderr, "multi_page START: %s\n", get_formatted_time()); 
 	const char *params[2];
 	PGresult *res;
 	res = PQexecPrepared(conn, "get-dirty-spec-ids", 0, NULL, NULL, NULL, 0);
@@ -196,18 +197,27 @@ static void multi_page(PGnotify *notify)
 		while (has_more) {
 			PGresult *res2 = PQexecPrepared(conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
 			if (PQresultStatus(res2) != PGRES_TUPLES_OK) {
-				fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
+				fprintf(stderr, "get-dirty-spec-ids params: %s, error: %s \n", *params, PQerrorMessage(conn));
+				break;
 			}
+			//fprintf(stdout, "res_cnt: %d\n", res_cnt);
 			int res_len = PQntuples(res2);
 			res_cnt += res_len;
 			has_more = res_len == CHUNK_SIZE;
+			if (has_more) {
+				// TODO: free params[1]
+				params[1] = strdup(PQgetvalue(res2, res_len-1, 0));
+			}
+			//fprintf(stderr, "has_more: %d, params[1]: %s\n", has_more, params[1]);
 			// TODO: this becomes a queue write when we go multi-threaded.
 			handle_pages(conn, state, res2, atoi(spec_ids[i]));
 			// TODO: figure out column/row
-			params[1] = PQgetvalue(res2, res_cnt, 0);
+			//fprintf(stderr, "step of %d items %s\n", CHUNK_SIZE, get_formatted_time()); 
 		}
-	PQclear(res);
 	}
+	PQclear(res);
+	//fprintf(stderr, "updated page: %s \n", notify->extra);
+	fprintf(stderr, "multi_page END: %s\n", get_formatted_time()); 
 }
 
 static void run_loop(void)
@@ -228,6 +238,7 @@ static void run_loop(void)
 		PQconsumeInput(conn);
 		while ((notify = PQnotifies(conn))) {
 			fprintf(stderr, "notification: relname: %s \n", notify->relname);
+			fprintf(stderr, "notify START: %s\n", get_formatted_time()); 
 			if (!strcmp(notify->relname, "webpage_dirty")) {
 				single_page(notify);
 			} else if(!strcmp(notify->relname, "webpages_dirty")) {
@@ -237,6 +248,7 @@ static void run_loop(void)
 						notify->relname);	
 			}
 			PQfreemem(notify);
+			fprintf(stderr, "notify END: %s\n", get_formatted_time()); 
 		}
 		// purge the leftovers out of the queue.
 		pthread_cond_signal(&state->ctl->cond);

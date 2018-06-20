@@ -17,7 +17,9 @@ FlagFlipperState *flag_flipper_new(void)
 
 PageIdArray *page_id_array_create(size_t len)
 {
-	PageIdArray *arr = malloc(sizeof(*arr) + sizeof(unsigned int) * len);
+	PageIdArray *arr = malloc(sizeof(*arr) + (sizeof(int) * len));
+	arr->len = 0;
+	for (unsigned int i=0; i < len; i++){arr->data[i] = 0;}
 	return arr;
 }
 
@@ -83,10 +85,10 @@ void *webpage_clear_dirty_thread(void *arg)
 
 	while (st->ctl->active) {
 		while (bqueue_empty(st->wq) && st->ctl->active) {
-			fprintf(stderr, "empty: %d size: %lu, active: %d : \n", bqueue_empty(st->wq), bqueue_size(st->wq), st->ctl->active);
+			//fprintf(stderr, "empty: %d size: %lu, active: %d : \n", bqueue_empty(st->wq), bqueue_size(st->wq), st->ctl->active);
 			pthread_cond_wait(&st->ctl->cond, &st->ctl->mutex);
 		}
-		fprintf(stderr, "empty: %d size: %lu, active: %d : \n", bqueue_empty(st->wq), bqueue_size(st->wq), st->ctl->active);
+		//fprintf(stderr, "empty: %d size: %lu, active: %d : \n", bqueue_empty(st->wq), bqueue_size(st->wq), st->ctl->active);
 		if (!st->ctl->active) { break; }
 		if (bqueue_empty(st->wq)) { continue;}
 		work = bqueue_pop(st->wq); // peek ? would move this to the conditional
@@ -94,13 +96,13 @@ void *webpage_clear_dirty_thread(void *arg)
 
 		// build & run query 
 		vals[0] = array_to_str(work->data, work->len);
-		fprintf(stderr, "ids: %s\n", vals[0]);
-		fprintf(stderr, "updating %lu page(s).\n", work->len);
+		//fprintf(stderr, "ids: %s\n", vals[0]);
+		//fprintf(stderr, "updating %lu page(s).\n", work->len);
 		res = PQexecPrepared(conn, "flip-flag", 1, vals, NULL, NULL, 0);
 		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 			fprintf(stderr, "webpage_clear_dirty_flag failed: %s\n", PQerrorMessage(conn));
 		}
-		free(work);
+	//	free(work);
 		PQclear(res);
 		pthread_mutex_lock(&st->ctl->mutex);
 	}
