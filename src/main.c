@@ -25,6 +25,7 @@
 #include <sys/select.h>
 
 #include <libpq-fe.h>
+#include <json-c/json.h> 
 
 #include "renderer.h"
 #include "flag_flipper.h"
@@ -47,6 +48,8 @@
 	"where p.dirty = true and p.page_spec_id = $1 and p.id > $2 "\
 	"order by p.page_spec_id, p.taxon_id, p.id "\
 	"limit 2000; "\
+
+#define GET_GLOBAL_CONTEXT_SQL "select data from config where name = 'context_globals';"
 
 // Global State 
 // TODO: Should live in a struct instance probably.
@@ -128,6 +131,14 @@ static int init_postgres(void)
 		return -1;
 	}
 	PQclear(res);
+	res = PQprepare(conn, "get-global-context", GET_GLOBAL_CONTEXT_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
+				PQerrorMessage(conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
 	return 0;
 }
 
@@ -148,6 +159,19 @@ static int init(void)
 	}
 	quit = 0;
 	return 0;
+}
+
+static json_object *get_global_context(void)
+{
+	PGresult *res;
+	res = PQexecPrepared(conn, "get-global-context", 0, NULL, NULL, NULL, 0);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		fprintf(stderr, "get-global-context Error: %s \n", PQerrorMessage(conn));
+	}
+	json_object *global_context = json_tokener_parse(PQgetvalue(res, 0, 0));
+//	json_object_get(global_context);
+	PQclear(res);
+	return global_context;
 }
 
 static void single_page(PGnotify *notify) 
@@ -177,18 +201,20 @@ static void single_page(PGnotify *notify)
 static void multi_page(PGnotify *notify)
 {
 	fprintf(stderr, "multi_page START: %s\n", get_formatted_time()); 
+	json_object *global_context = get_global_context();
 	const char *params[2];
+	char *pk = NULL;
 	PGresult *res;
 	res = PQexecPrepared(conn, "get-dirty-spec-ids", 0, NULL, NULL, NULL, 0);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(conn));
 	}
 	int spec_ids_len = PQntuples(res);
+	if (!spec_ids_len) { return ;} // bail if nothing to do
 	char *spec_ids[spec_ids_len];
 	for (int i=0; i < spec_ids_len; i++) {
 		spec_ids[i] = PQgetvalue(res, i, 0);
 	}
-
 	for (int i = 0; i < spec_ids_len; i++) {
 		int res_cnt = 0;
 		params[0] = spec_ids[i];
@@ -201,20 +227,28 @@ static void multi_page(PGnotify *notify)
 				break;
 			}
 			//fprintf(stdout, "res_cnt: %d\n", res_cnt);
+			if (pk) { free(pk); }
 			int res_len = PQntuples(res2);
+			if (!res_len) {
+				has_more = false;
+				PQclear(res2);
+				break;
+			}
 			res_cnt += res_len;
 			has_more = res_len == CHUNK_SIZE;
 			if (has_more) {
 				// TODO: free params[1]
-				params[1] = strdup(PQgetvalue(res2, res_len-1, 0));
+				pk = strdup(PQgetvalue(res2, res_len-1, 0));
+				params[1] = pk; 
 			}
 			//fprintf(stderr, "has_more: %d, params[1]: %s\n", has_more, params[1]);
 			// TODO: this becomes a queue write when we go multi-threaded.
-			handle_pages(conn, state, res2, atoi(spec_ids[i]));
+			handle_pages(conn, state, res2, atoi(spec_ids[i]), global_context);
 			// TODO: figure out column/row
 			//fprintf(stderr, "step of %d items %s\n", CHUNK_SIZE, get_formatted_time()); 
 		}
 	}
+	json_object_put(global_context);
 	PQclear(res);
 	//fprintf(stderr, "updated page: %s \n", notify->extra);
 	fprintf(stderr, "multi_page END: %s\n", get_formatted_time()); 

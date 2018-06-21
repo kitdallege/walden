@@ -79,8 +79,10 @@ void *webpage_clear_dirty_thread(void *arg)
 		fprintf(stderr, "failed to prepare statement!\n");
 		PQclear(res);
 	}
+	PQclear(res);
 	// build query out of passed in ids.
 	PageIdArray *work;
+	char *arr_str;
 	const char *vals[1];
 
 	while (st->ctl->active) {
@@ -95,14 +97,16 @@ void *webpage_clear_dirty_thread(void *arg)
 		pthread_mutex_unlock(&st->ctl->mutex);
 
 		// build & run query 
-		vals[0] = array_to_str(work->data, work->len);
+		arr_str = array_to_str(work->data, work->len);
+		vals[0] = arr_str; 
 		//fprintf(stderr, "ids: %s\n", vals[0]);
 		//fprintf(stderr, "updating %lu page(s).\n", work->len);
 		res = PQexecPrepared(conn, "flip-flag", 1, vals, NULL, NULL, 0);
 		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 			fprintf(stderr, "webpage_clear_dirty_flag failed: %s\n", PQerrorMessage(conn));
 		}
-	//	free(work);
+		free(work);
+		free(arr_str);
 		PQclear(res);
 		pthread_mutex_lock(&st->ctl->mutex);
 	}

@@ -6,6 +6,8 @@
 #include "deps/hash_table/hash_table.h"
 #include "deps/hash_table/fnv_hash.h"
 
+#include <json-c/json.h> 
+
 #include "log.h"
 #include "templates.h"
 #include "page_spec.h"
@@ -46,7 +48,7 @@ static bool is_scalar(int page_spec_id)
 
 static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
-		char *query_file)
+		char *query_file, json_object *global_context)
 {
 	//fprintf(stderr, "START handle_pages_scalar \n");
 	// query per page.
@@ -67,28 +69,35 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 			return 1;
 		}
 		free(cmd);
+		// build context
 		char *context_data = PQgetvalue(res, 0, 0);
-		char *html = render_template_str(template_data, context_data);
+		json_object *obj = json_tokener_parse(context_data);
+		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
+		//json_object_object_merge(obj, json_object_get(global_context));
+		// render
+		char *html = render_template_str(template_data, obj);
 		//write files
 		const char *filename = PQgetvalue(results, i, 1);
 		char *path = PQgetvalue(results, i, 2);
-		// path needs to drop the / and be joined with the real web_root
-		// walk path forward past the first dir.
-		path += 4;
+		path += 4; // walk path forward past the first dir.
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file.\n");
-			PQclear(res);
 			free(html);
+			//json_object_put(obj);
+			PQclear(res);
 			return 1;
 		}
 		if (write_pjax(filename, path, html)) {
 			fprintf(stderr, "unable to write pjax file.\n");
-			PQclear(res);
 			free(html);
+			//json_object_put(obj);
+			PQclear(res);
 			return 1;
 		}
+		free(html);
+		json_object_put(obj);
+		PQclear(res);
 	}
-	PQclear(res);
 	pthread_mutex_lock(&(flipper->ctl->mutex));
 	// TODO: use a struct so we can store len along side the ids
 	bqueue_push(flipper->wq, page_ids);
@@ -128,6 +137,7 @@ int augment_query(char **query_file, char **query_params, int params_len)
 	*semi = '\0';
 	strcat(*query_file, bp);
 	strcat(*query_file, ";");
+	free(bp);
 	//fprintf(stderr, "in augment: query_file: %s\n", *query_file);
 	return 0;
 }
@@ -136,7 +146,7 @@ int augment_query(char **query_file, char **query_params, int params_len)
 
 static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
-		char **query_file)
+		char **query_file, json_object *global_context)
 {
 	//fprintf(stderr, "START handle_pages_vector \n");
 	if (!results_len) { return 0; }
@@ -172,11 +182,14 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	struct hash_entry *item;	
 	// check: len(res) == len(results)
 	for (int i = 0; i < results_len; i++) {
+		// create context
 		char *json_data = PQgetvalue(res, i, 1);
-		// TODO: Missing CWD: so the template fails.
-		char *html = render_template_str(template_data, json_data);
-		//write files
-		// TODO: figure out pk column and context column
+		json_object *obj = json_tokener_parse(json_data);
+		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
+		//json_object_object_merge(obj, json_object_get(global_context));
+		// render
+		char *html = render_template_str(template_data, obj);
+		// write html files
 		item = NULL;
 		item = hash_table_search(ptable, PQgetvalue(res, i, 0));
 		if (!item) {
@@ -185,21 +198,24 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		int row_idx = *(int *)item->data; 
 		const char *filename = PQgetvalue(results, row_idx, 1);
 		char *path = PQgetvalue(results, row_idx, 2);
-		path += 4;
-		// walk path forward past the first dir.
+		path += 4; // walk path forward past the first dir.
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file.\n");
-			free(json_data);
 			free(html);
+			//json_object_put(obj);
 			return 1;
 		}
 		if (write_pjax(filename, path, html)) {
 			fprintf(stderr, "unable to write pjax file.\n");
-			free(json_data);
 			free(html);
+			//json_object_put(obj);
 			return 1;
 		}
+		free(html);
+		json_object_put(obj);
 	}
+	hash_table_destroy(ptable, NULL);
+	PQclear(res);
 	pthread_mutex_lock(&(flipper->ctl->mutex));
 	bqueue_push(flipper->wq, page_ids);
 	pthread_cond_broadcast(&(flipper->ctl->cond));
@@ -208,7 +224,8 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	return 0;
 }
 
-int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results, int spec_id)
+int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
+		int spec_id, json_object *global_context)
 {
 	// load up template_file
 	char *template_path = mk_abs_path(root_dir, template_dir, PQgetvalue(results, 0, 3), NULL);
@@ -233,14 +250,16 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results, int
 	if (is_scalar(spec_id)) {
 		handle_pages_scalar(
 			conn, flipper, results, results_len, spec_id,
-			template_data, query_file
+			template_data, query_file, global_context
 		);
 	} else {
 		handle_pages_vector(
 			conn, flipper, results, results_len, spec_id,
-			template_data, &query_file
+			template_data, &query_file, global_context
 		);
 	}
+	free(template_data);
+	free(query_file);
 	PQclear(results);
 	return 0;
 }
