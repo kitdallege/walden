@@ -57,8 +57,9 @@ char *render_template_str(const char *template_data, json_object *obj)
 
 void json_object_object_merge(json_object *obj1, json_object *obj2)
 {
+	//json_object_get(obj2);
 	json_object_object_foreach(obj2, key, val) {
-		json_object_object_add(obj1, key, val);
+		json_object_object_add(obj1, key, json_object_get(val));
 	}
 }
 

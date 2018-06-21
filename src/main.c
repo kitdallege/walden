@@ -227,7 +227,7 @@ static void multi_page(PGnotify *notify)
 				break;
 			}
 			//fprintf(stdout, "res_cnt: %d\n", res_cnt);
-			if (pk) { free(pk); }
+			if (pk) {free(pk); pk = NULL;}
 			int res_len = PQntuples(res2);
 			if (!res_len) {
 				has_more = false;

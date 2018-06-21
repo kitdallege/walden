@@ -73,7 +73,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		char *context_data = PQgetvalue(res, 0, 0);
 		json_object *obj = json_tokener_parse(context_data);
 		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
-		//json_object_object_merge(obj, json_object_get(global_context));
+		json_object_object_merge(obj, global_context);
 		// render
 		char *html = render_template_str(template_data, obj);
 		//write files
@@ -186,7 +186,7 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		char *json_data = PQgetvalue(res, i, 1);
 		json_object *obj = json_tokener_parse(json_data);
 		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
-		//json_object_object_merge(obj, json_object_get(global_context));
+		json_object_object_merge(obj, global_context);
 		// render
 		char *html = render_template_str(template_data, obj);
 		// write html files
