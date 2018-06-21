@@ -79,20 +79,12 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		//write files
 		const char *filename = PQgetvalue(results, i, 1);
 		char *path = PQgetvalue(results, i, 2);
-		path += 4; // walk path forward past the first dir.
+		path += 5; // walk path forward past the first dir.
 		if (write_page(filename, path, html)) {
-			fprintf(stderr, "unable to write html file.\n");
-			free(html);
-			//json_object_put(obj);
-			PQclear(res);
-			return 1;
+			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}
 		if (write_pjax(filename, path, html)) {
-			fprintf(stderr, "unable to write pjax file.\n");
-			free(html);
-			//json_object_put(obj);
-			PQclear(res);
-			return 1;
+			fprintf(stderr, "unable to write pjax file. filename:%s path:%s\n", filename, path);
 		}
 		free(html);
 		json_object_put(obj);
@@ -198,18 +190,12 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		int row_idx = *(int *)item->data; 
 		const char *filename = PQgetvalue(results, row_idx, 1);
 		char *path = PQgetvalue(results, row_idx, 2);
-		path += 4; // walk path forward past the first dir.
+		path += 5; // walk path forward past the first dir.
 		if (write_page(filename, path, html)) {
-			fprintf(stderr, "unable to write html file.\n");
-			free(html);
-			//json_object_put(obj);
-			return 1;
+			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}
 		if (write_pjax(filename, path, html)) {
-			fprintf(stderr, "unable to write pjax file.\n");
-			free(html);
-			//json_object_put(obj);
-			return 1;
+			fprintf(stderr, "unable to write pjax file. filename:%s path:%s\n", filename, path);
 		}
 		free(html);
 		json_object_put(obj);
@@ -364,12 +350,15 @@ int write_page(const char *name, const char *path, const char *data)
 	char *filename = mk_abs_path(root_dir, web_dir, (char *)path,
 					(char *)name, NULL);
 	char *dir = strdup(filename);
-	if (mkdir_p(dirname(dir))) {
-		fprintf(stderr, "error making directory: \"%s\"\n", dir);
-		ret =  -1;
+	char *dir_name = dirname(dir);
+	if (!file_exists(dir_name)) {
+		if (mkdir_p(dir_name)) {
+			fprintf(stderr, "error making directory: dir:%s \n", dir_name);
+			ret =  -1;
+		}
 	}
 	if(write_file(filename, data)) {
-		fprintf(stderr, "write_page failed.\n");
+		fprintf(stderr, "write_page failed. filename: %s\n", filename);
 		ret = -1;
 	}
 	free(filename);
@@ -385,9 +374,12 @@ int write_pjax(const char *name, const char *path, const char *data)
 	char *filename = mk_abs_path(root_dir, web_dir, pjax_dir,
 					(char *)path, (char *)name, NULL);
 	char *dir = strdup(filename);
-	if (mkdir_p(dirname(dir))) {
-		fprintf(stderr, "error making directory: \"%s\"\n", dir);
-		ret = -1;
+	char *dir_name = dirname(dir);
+	if (!file_exists(dir_name)) {
+		if (mkdir_p(dir_name)) {
+			fprintf(stderr, "error making directory: \"%s\"\n", dir_name);
+			ret = -1;
+		}
 	}
 	// parse out main from data
 	char *start = strstr(data, "<main>");
@@ -395,7 +387,7 @@ int write_pjax(const char *name, const char *path, const char *data)
 	char *pdata  = calloc(strlen(data) + 1, sizeof(*pdata));
 	strncpy(pdata, start, (end + 7) - start);
 	if (write_file(filename, pdata)) {
-		fprintf(stderr, "write_pjax failed.\n");
+		fprintf(stderr, "write_pjax failed. filename:%s\n", filename);
 		ret = -1;
 	}
 	free(filename);

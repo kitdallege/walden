@@ -115,17 +115,20 @@ int write_file(const char *name, const char *data)
 	// name + ~
 	char temp_name[strlen(name) + 2];
 	snprintf(temp_name, sizeof(temp_name), "%s~", name);
-	// if it exists remove it
-	if (unlink(temp_name)) {
-		if (errno != ENOENT) {
-			fprintf(stderr, "unable to remove existing temp file: %s\n", strerror(errno));
-			return -1;	
+	if (file_exists(temp_name)) { 
+		if (unlink(temp_name)) {
+			if (errno != ENOENT) {
+				fprintf(stderr, "unable to remove existing temp file: file:%s error:%s\n",
+						temp_name, strerror(errno));
+				return -1;	
+			}
 		}
 	}
 	// open temp file
 	int fd = open(temp_name, O_RDWR|O_CREAT|O_TRUNC, perms);
 	if (fd == -1) {
-		fprintf(stderr, "failed to open file for writing: %s\n", strerror(errno));
+		fprintf(stderr, "failed to open file for writing: file: %s error:%s\n",
+				temp_name, strerror(errno));
 		return -1;
 	}
 	// write to it
@@ -138,12 +141,14 @@ int write_file(const char *name, const char *data)
 	} */
 	// change owner & group
 	if (fchown(fd, user, group)) {
-		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
+		fprintf(stderr, "failed to fsync file: file:%s error:%s\n",
+				temp_name, strerror(errno));
 		return -1;
 	}
 	// set file perms
 	if (fchmod(fd, perms)) {
-		fprintf(stderr, "failed to chmod file: %s\n", strerror(errno));
+		fprintf(stderr, "failed to chmod file: file: %s error:%s\n",
+				temp_name, strerror(errno));
 		return -1;
 	}
 	if (close(fd)) {
@@ -151,7 +156,8 @@ int write_file(const char *name, const char *data)
 	}
 	// *atomic write via rename* [keep from causing an nginx error]
 	if (rename(temp_name, name)) {
-		fprintf(stderr, "failed to rename file: %s\n", strerror(errno));
+		fprintf(stderr, "failed to rename file: from-file:%s to-file:%s error:%s\n",
+				temp_name, name, strerror(errno));
 	   return -1;
 	}
 	return 0;

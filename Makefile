@@ -8,7 +8,7 @@ CC	= gcc
 PREFIX?=/usr/local
 INSTALL_DIR=$(PREFIX)/bin
 
-CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
+CFLAGS  += -g -ggdb -O0 -Wall -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wno-unused-function 
 CFLAGS  += -I. -I./include -I`pg_config --includedir`
 CFLAGS  += `pkg-config json-c --cflags`
