@@ -29,7 +29,6 @@ char *render_template(const char *template, const char *json_data)
 	json_object_put(obj);
 	return results;
 }
-
 char *render_template_str(const char *template_data, json_object *obj)
 {
 	// TODO: pass in template_data rather than the path.

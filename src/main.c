@@ -216,6 +216,7 @@ static void multi_page(PGnotify *notify)
 		spec_ids[i] = PQgetvalue(res, i, 0);
 	}
 	for (int i = 0; i < spec_ids_len; i++) {
+		fprintf(stderr, "multi_page [start spec] spec_id: %s time: %s\n", spec_ids[i], get_formatted_time()); 
 		int res_cnt = 0;
 		params[0] = spec_ids[i];
 		params[1] = "0";
@@ -223,7 +224,7 @@ static void multi_page(PGnotify *notify)
 		while (has_more) {
 			PGresult *res2 = PQexecPrepared(conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
 			if (PQresultStatus(res2) != PGRES_TUPLES_OK) {
-				fprintf(stderr, "get-dirty-spec-ids params: %s, error: %s \n", *params, PQerrorMessage(conn));
+				fprintf(stderr, "get-dirty-pages params: %s, error: %s \n", *params, PQerrorMessage(conn));
 				break;
 			}
 			//fprintf(stdout, "res_cnt: %d\n", res_cnt);
@@ -243,10 +244,13 @@ static void multi_page(PGnotify *notify)
 			}
 			//fprintf(stderr, "has_more: %d, params[1]: %s\n", has_more, params[1]);
 			// TODO: this becomes a queue write when we go multi-threaded.
+			fprintf(stderr, "multi_page [start handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
 			handle_pages(conn, state, res2, atoi(spec_ids[i]), global_context);
+			fprintf(stderr, "multi_page [end handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
 			// TODO: figure out column/row
 			//fprintf(stderr, "step of %d items %s\n", CHUNK_SIZE, get_formatted_time()); 
 		}
+		fprintf(stderr, "multi_page [end spec] spec_id: %s time: %s\n", spec_ids[i], get_formatted_time()); 
 	}
 	json_object_put(global_context);
 	PQclear(res);

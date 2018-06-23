@@ -115,15 +115,9 @@ int write_file(const char *name, const char *data)
 	// name + ~
 	char temp_name[strlen(name) + 2];
 	snprintf(temp_name, sizeof(temp_name), "%s~", name);
-	if (file_exists(temp_name)) { 
-		if (unlink(temp_name)) {
-			if (errno != ENOENT) {
-				fprintf(stderr, "unable to remove existing temp file: file:%s error:%s\n",
-						temp_name, strerror(errno));
-				return -1;	
-			}
-		}
-	}
+	// generic open/write/close seems faster for smaller sized files.
+	// as file size increases aio starts to win out.. Going with 
+	// generic fio for now, most pages are small, and its simpiler.
 	// open temp file
 	int fd = open(temp_name, O_RDWR|O_CREAT|O_TRUNC, perms);
 	if (fd == -1) {
@@ -132,9 +126,9 @@ int write_file(const char *name, const char *data)
 		return -1;
 	}
 	// write to it
-	//dprintf(fd, data); // <- suspect this might be O(n) instead of O(1)
 	write(fd, data, strlen(data)); // if len was passed in it'd help
-	/*/  flush the buffer	(this accounts for almost 90% of call time) 
+	/* flushing the bufferaccounts for almost 90% of call time. 
+	 * NOTE:  were trading  durability for performance here.
 	if (fsync(fd)) {
 		fprintf(stderr, "failed to fsync file: %s\n", strerror(errno));
 		return -1;

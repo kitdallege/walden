@@ -34,12 +34,12 @@ static bool is_scalar(int page_spec_id)
 {
 	bool ret = false;
 	switch (page_spec_id) {
-		case 5: {
-		   	ret = false;
+		case 1: {
+		   	ret = true;
 			break;
 		}
 		default: {
-			ret = true;
+			ret = false;
 			break;
 		 }
 	}
@@ -50,7 +50,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char *query_file, json_object *global_context)
 {
-	//fprintf(stderr, "START handle_pages_scalar \n");
+	fprintf(stderr, "START handle_pages_scalar \n");
 	// query per page.
 	PGresult *res;
 	PageIdArray *page_ids = page_id_array_create(results_len);
@@ -66,6 +66,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 			fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(conn));
 			PQclear(res);
 			free(cmd);
+			fprintf(stderr, "END handle_pages_scalar \n");
 			return 1;
 		}
 		free(cmd);
@@ -94,7 +95,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 	// TODO: use a struct so we can store len along side the ids
 	bqueue_push(flipper->wq, page_ids);
 	pthread_mutex_unlock(&(flipper->ctl->mutex));
-	//fprintf(stderr, "END handle_pages_scalar \n");
+	fprintf(stderr, "END handle_pages_scalar \n");
 	return 0;
 }
 
@@ -108,7 +109,7 @@ int augment_query(char **query_file, char **query_params, int params_len)
 	// TODO: figure out why garbage memory is blowing this up..
 	// would be nice to nix the memset.
 	memset(bp, 0, temp_size);
-	strcpy(temp, " WHERE id = ANY('{");
+	strcpy(temp, " WHERE pk = ANY('{");
 	temp += 18;
 	for (int i = 0; i < params_len; i++) {
 		char *str = query_params[i];
@@ -140,7 +141,7 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char **query_file, json_object *global_context)
 {
-	//fprintf(stderr, "START handle_pages_vector \n");
+	fprintf(stderr, "START handle_pages_vector \n");
 	if (!results_len) { return 0; }
 	// 1 query for all pages.
 	PGresult *res;
@@ -155,22 +156,25 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		query_param = PQgetvalue(results, i, 5);	
 		query_params[i] = query_param;
 		row_ids[i] = i;
-		//fprintf(stderr, "hash_table_insert: %s\n", query_param);
 		hash_table_insert(ptable, query_param, &row_ids[i]);
 		unsigned int pk = atoi(PQgetvalue(results, i, 0));
-		//fprintf(stderr, "page_ids->data[i] = %d\n", pk);
 		page_ids->data[i] = pk; page_ids->len++;
 	}
-	//fprintf(stderr, "query_file: %s\n", *query_file);
+	//fprintf(stderr, "query_file pre agument: %s\n", *query_file);
 	augment_query(query_file, query_params, results_len);
+	//fprintf(stderr, "query_file post agument: %s\n", *query_file);
 	res = PQexec(conn, *query_file);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		fprintf(stderr, "error with query: %s error:%s\n", *query_file,
 				PQerrorMessage(conn));
+		fprintf(stderr, "END handle_pages_vector \n");
 		return 0;
 	}
 	//fprintf(stderr, "vectorized query returned %d rows. \n", PQntuples(res));
-	if (!PQntuples(res)) { return 0;}
+	if (!PQntuples(res)) {
+		fprintf(stderr, "END handle_pages_vector \n");
+		return 0;
+	}
 	struct hash_entry *item;	
 	// check: len(res) == len(results)
 	for (int i = 0; i < results_len; i++) {
@@ -206,7 +210,7 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	bqueue_push(flipper->wq, page_ids);
 	pthread_cond_broadcast(&(flipper->ctl->cond));
 	pthread_mutex_unlock(&(flipper->ctl->mutex));
-	//fprintf(stderr, "END handle_pages_vector \n");
+	fprintf(stderr, "END handle_pages_vector \n");
 	return 0;
 }
 
@@ -233,6 +237,8 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
 	free(query_path);
 	// render out pages
 	int results_len = PQntuples(results);
+	// TODO: Nothing 'is scalar' even pages that are, could/should be twisted
+	// into using the 'vectorized' backend. (less code paths to manage).
 	if (is_scalar(spec_id)) {
 		handle_pages_scalar(
 			conn, flipper, results, results_len, spec_id,
@@ -383,6 +389,11 @@ int write_pjax(const char *name, const char *path, const char *data)
 	}
 	// parse out main from data
 	char *start = strstr(data, "<main>");
+	if (!start) {
+		free(filename);
+		free(dir);
+		return -1;
+	}
 	char *end = strstr(start, "</main>");
 	char *pdata  = calloc(strlen(data) + 1, sizeof(*pdata));
 	strncpy(pdata, start, (end + 7) - start);
