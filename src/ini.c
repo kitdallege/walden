@@ -4,7 +4,6 @@
 #include <errno.h>
 
 #include "ini.h"
-#include "mem.h"
 
 static char *readline(FILE *file)
 {
@@ -72,7 +71,7 @@ char *ini_get_db_conf_from_file(const char *filename)
 	FILE *file;
 	char *line;
 	int line_len;
-	char *value, *p;
+	char *value = NULL, *p;
 	file = fopen(filename, "r");
 	if (!file) {
 		fprintf(stderr, "unable to open ini file: %s\n", filename);
@@ -88,13 +87,15 @@ char *ini_get_db_conf_from_file(const char *filename)
 		p = strchr(line, '=');
 		p++;
 		while (*p == ' ' || *p == '"') {p++;}
-		value = mem_acquire(line_len - (line - p) + 1);
+		value = malloc(line_len);
 	   	strcpy(value, p);
 		p = &value[strlen(p)-1];
 		while (*p == ' ' || *p == '"') {*p-- = '\0';}
 		fprintf(stderr, "ini_get_db_conf_from_file: \"%s\"\n", value);
+		free(line);
 		break;
 	}
+	fclose(file);
 	return value;
 }
 

@@ -8,7 +8,7 @@
 
 typedef struct AppConfig
 {
-	char db_conn_info[512];
+	char *db_conn_info;
 } AppConfig;
 
 struct AppState

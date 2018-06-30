@@ -13,37 +13,16 @@ struct Memory
 	void  *transient_storage;
 };
 
+// TODO:
+//  * align memory (power of 2 offsets)
+//  * free-list GP allocator.
+
 static Memory memory = {0};
 int top = 0;
 int top_p = 0, top_t = 0;
 uint64_t total_storage_size = 0;
 void *base_address = (void *)Terabytes(4);	
 
-// current api
-void memory_init(void)
-{
-	mem_system_acquire();
-}
-void memory_free(void)
-{
-	mem_system_release();
-}
-void *acquire(size_t bytes)
-{
-	void *ptr;
-    ptr = (char *)memory.persistent_storage;
-	top += bytes;
-	fprintf(stderr, "acquire: %p\n", memory.persistent_storage);
-	fprintf(stderr, "next: %p\n", (char *)memory.persistent_storage + top);
-	return ptr;
-}
-
-void free(void *ptr)
-{
-
-}
-
-// future api
 void mem_system_acquire(void)
 {
 	memory.persistent_storage_size = Kilobytes(2);
@@ -103,6 +82,8 @@ void  mem_release(void *ptr)
 	// mark as a free block ?
 }
 
+
+// utils
 static void display_mallinfo(FILE *stream)
 {
     struct mallinfo mi;

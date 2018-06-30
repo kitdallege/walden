@@ -7,7 +7,6 @@
 
 #include "reload.h"
 #include "app.h"
-#include "mem.h"
 
 struct App app = {0};
 const char *lib = "./build/libresource-mgr.so";
@@ -17,7 +16,6 @@ static void handle_signal(int signal)
 {
 	
 	unload_app(&app);
-	mem_system_release();
 	//pthread_exit(NULL);
 	// cleans up some thread local (makes valgrind happy) 
 	// https://stackoverflow.com/a/1874334
@@ -26,7 +24,6 @@ static void handle_signal(int signal)
 	// basically dlopen allocs memory for errormsg in a thread_local storage.
 	// whilst its cleaned up automaticall at process exit, it still 
 	// pisses valgrind off. ;P
-	(void) mem_write_report(stderr);
 	exit(1);
 }
 
@@ -39,7 +36,6 @@ int main(int argc, char **argv)
 	 * it automatically.
 	 */
 	signal(SIGINT, handle_signal); 
-	memory_init();
 	bool run = true;
 	while (run) {
 		load_app(&app, lib, api_var); // add a rate msec arg & remove usleep
@@ -49,6 +45,5 @@ int main(int argc, char **argv)
 		usleep(1000000);
 	}
 	unload_app(&app);
-	mem_system_release();
 }
 

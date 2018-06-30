@@ -29,7 +29,7 @@ S_OBJS 	= $(SRCS:src/%.c=$(OBJDIR)/%.o)
 all: $(APP) $(OBJDIR)/libresource-mgr.so
 
 # Application
-$(APP): $(OBJDIR)/main.o $(OBJDIR)/mem.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/app.o
+$(APP): $(OBJDIR)/main.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/app.o
 	$(CC) -rdynamic $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 #$(OBJDIR)/%.o: $(SRCDIR)/%.c
@@ -37,8 +37,8 @@ $(OBJDIR)/ini.o: $(SRCDIR)/ini.c
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 $(OBJDIR)/reload.o: $(SRCDIR)/reload.c
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
-$(OBJDIR)/mem.o: $(SRCDIR)/mem.c
-	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
+#$(OBJDIR)/mem.o: $(SRCDIR)/mem.c
+#	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 $(OBJDIR)/main.o: $(SRCDIR)/main.c 
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 
