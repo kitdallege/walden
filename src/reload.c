@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -9,6 +10,7 @@
 
 void load_app(App *app, const char *lib, const char *api_var)
 {
+	// check timestamp against current if diff < rate then NOOP.
 	struct stat attr;
 	if ((stat(lib, &attr) == 0) && (app->id != attr.st_ino)) {
 		if (app->handle) {
@@ -28,12 +30,14 @@ void load_app(App *app, const char *lib, const char *api_var)
 				}
 				app->api.reload(app->state);
 			} else {
+				fprintf(stderr, "failed to lib handle %s\n", api_var);
 				dlclose(app->handle);
 				app->handle = NULL;
 				app->id = 0;
 			}
 			fprintf(stderr, "reload successful. id: %lu.\n", app->id);
 		} else {
+			fprintf(stderr, "failed to lib %s\n", lib);
 			app->handle = NULL;
 			app->id = 0;
 		}
@@ -42,8 +46,12 @@ void load_app(App *app, const char *lib, const char *api_var)
 
 void unload_app(App *app)
 {
-	if (app->handle) {
+	if (&app->api) {
+		app->api.delete(app->state);
 		app->state = NULL;
+	}
+	if (app->handle) {
+		//app->state = NULL;
 		dlclose(app->handle);
 		app->handle = NULL;
 		app->id = 0;

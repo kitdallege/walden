@@ -1,7 +1,9 @@
 #ifndef APP_H
 #define APP_H
 
-#include <stdbool.h>
+#include <sys/inotify.h>
+#include <libpq-fe.h>
+
 #include "reload.h"
 
 typedef struct AppConfig
@@ -11,9 +13,13 @@ typedef struct AppConfig
 
 struct AppState
 {
-	AppConfig config;
+	AppConfig *config;
+	int fd, wd, efd, cfg;
+	pid_t pid;
+	PGconn *conn;
+	char *buffer;
+	struct epoll_event *ev;
 };
-
 
 extern const struct AppApi app_api;
 

@@ -15,22 +15,26 @@ CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Werror -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS  += -Wsign-compare -std=gnu99 -pedantic 
 CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address 
+CFLAGS  += -I`pg_config --includedir`
 
-LDFLAGS = -ldl 
+LDFLAGS = -ldl -lpq -pthread
+LDFLAGS += $(shell pkg-config libpq --libs)
 SRCS 	= $(wildcard $(SRCDIR)/*.c)
 S_OBJS 	= $(SRCS:src/%.c=$(OBJDIR)/%.o)
 
 # TODO: same thing for plugin_srcs/plugin_s_objs & maybe plugin_libs
 # should allow me to use 2 rules to build all the plugins instead of 2per
 
-.PHONEY: all clean
+.PHONEY: rebuild all clean
 all: $(APP) $(OBJDIR)/libresource-mgr.so
 
 # Application
-$(APP): $(OBJDIR)/main.o $(OBJDIR)/mem.o $(OBJDIR)/reload.o $(OBJDIR)/app.o
+$(APP): $(OBJDIR)/main.o $(OBJDIR)/mem.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/app.o
 	$(CC) -rdynamic $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 #$(OBJDIR)/%.o: $(SRCDIR)/%.c
+$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
+	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 $(OBJDIR)/reload.o: $(SRCDIR)/reload.c
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 $(OBJDIR)/mem.o: $(SRCDIR)/mem.c
@@ -56,3 +60,7 @@ clean:
 	@rm -f $(OBJDIR)/*
 	@rm -f $(APP)
 
+
+rebuild:
+	$(MAKE) clean
+	$(MAKE) all
