@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #include "app.h"
-#include "ini.h"
+#include "inih/ini.h"
 
 #define EPOLL_WAIT_MS 1000 
 #define CONF_FILE "./resource-mgr.conf"
@@ -33,6 +33,17 @@ static char* get_formatted_time(void)
     strftime(_retval, sizeof(_retval), "%Y-%m-%d %H:%M:%S", timeinfo);
 
     return _retval;
+}
+static int ini_parse_handler(void *user, const char *section, const char *name, const char *value);
+
+static int ini_parse_handler(void *user, const char *section,
+							const char *name, const char *value)
+{
+	if (strcmp(name, "db-address") == 0) {
+		char **conf = (char **)user;
+		*conf = strdup(value);
+	}
+	return 1;
 }
 
 static AppState *app_create(void)
@@ -73,12 +84,13 @@ static void app_reload(AppState *state)
 {
 	fprintf(stderr, "app_reload(state: %p)\n", (void *)state);
 	// load conf and set state->config
-	state->config->db_conn_info = ini_get_db_conf_from_file(CONF_FILE);
-	if (!state->config->db_conn_info) {
+	//state->config->db_conn_info = ini_get_db_conf_from_file(CONF_FILE);
+	if (ini_parse(CONF_FILE, ini_parse_handler, &state->config->db_conn_info) < 0) {
 		fprintf(stderr, "error loading config file.\n");
 	}
 	// setup postgres db connection
 	PGresult *res;
+	fprintf(stderr, "Connecting to: %s\n", state->config->db_conn_info);
 	state->conn = PQconnectdb(state->config->db_conn_info);
 	if (PQstatus(state->conn) != CONNECTION_OK) {
 		fprintf(stderr, "Connection to database failed: %s",

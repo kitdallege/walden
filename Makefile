@@ -11,6 +11,8 @@ DEPSDIR		= ./deps
 LIB 		= $(OBJDIR)/libresource-mgr.so
 CC		= gcc
 
+# TODO: Break up c/ld flags so that were only linking the app
+# against libpq (etc).
 CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Werror -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic 
@@ -40,11 +42,18 @@ $(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
-$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
-	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
+#$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
+#	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 
+# Deps
 $(OBJDIR)/reload.o: $(DEPSDIR)/reload/reload.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/reload/
+
+$(OBJDIR)/hash_table.o: $(DEPSDIR)/hash_table/hash_table.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/hash_table/
+
+$(OBJDIR)/ini.o: $(DEPSDIR)/inih/ini.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/inih/
 
 # make build dir
 $(OBJDIR):
