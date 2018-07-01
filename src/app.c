@@ -12,7 +12,8 @@
 #include "app.h"
 #include "ini.h"
 
-
+#define EPOLL_WAIT_MS 1000 
+#define CONF_FILE "./resource-mgr.conf"
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
 #define MAX_EVENTS 64
 #define EVENT_SIZE (sizeof(struct inotify_event))
@@ -40,19 +41,13 @@ static AppState *app_create(void)
 	state->config = malloc(sizeof(state->config));
 	state->buffer = calloc(1, BUF_LEN);
 	state->ev = calloc(MAX_EVENTS, sizeof(*state->ev));
-	//memset(state->ev, 0, sizeof(*state->ev));
-	//struct epoll_event ev;
-	//memset(&ev, 0, sizeof(ev));
-	// load config
-	// setup notify 4 config
-	
-	fprintf(stderr, "app_create: %p\n", (void *)state);
+	fprintf(stderr, "app_create(state: %p)\n", (void *)state);
 	return state;
 }
 
 static void app_delete(AppState *state)
 {
-	fprintf(stderr, "app_delete: %p\n", (void *)state);
+	fprintf(stderr, "app_delete(state: %p)\n", (void *)state);
 	PQfinish(state->conn);
 	free(state->config->db_conn_info);
 	free(state->config);
@@ -64,19 +59,21 @@ static void app_delete(AppState *state)
 
 static void app_unload(AppState *state)
 {
-	fprintf(stderr, "app_unload: %p\n", (void *)state);
+	fprintf(stderr, "app_unload(state: %p)\n", (void *)state);
 	// stop any notifications
 	// release state->config // set conf = NULL;
 	// close postgres connection
+	// close(state->efd); // epoll
+	// close(state->fd);  // inotify
 	free(state->config->db_conn_info);
 	PQfinish(state->conn);
 }
 
 static void app_reload(AppState *state)
 {
-	fprintf(stderr, "app_reload: %p\n", (void *)state);
+	fprintf(stderr, "app_reload(state: %p)\n", (void *)state);
 	// load conf and set state->config
-	state->config->db_conn_info = ini_get_db_conf_from_file("./resource-mgr.conf");
+	state->config->db_conn_info = ini_get_db_conf_from_file(CONF_FILE);
 	if (!state->config->db_conn_info) {
 		fprintf(stderr, "error loading config file.\n");
 	}
@@ -91,7 +88,8 @@ static void app_reload(AppState *state)
 	// set search_path
 	res = PQexec(state->conn, "set search_path = c2v");
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		fprintf(stderr, "set search_path failed: %s\n", PQerrorMessage(state->conn));
+		fprintf(stderr, "set search_path failed: %s\n",
+				PQerrorMessage(state->conn));
 		PQclear(res);
 		return ;
 	}
@@ -103,6 +101,14 @@ static void app_reload(AppState *state)
 	if (state->fd < 0) {
 		perror("inotify_init");
 	}
+	/*
+	 * Need to recursively scan and add a watch to every subdirectory
+	 * as well as the root.
+	 * TODO: create a struct watched { int fd; char *file} and add
+	 * an array of um to the state.
+	 * @reload: we can either mass remove / add the watches again
+	 * or only add/remove the diff from what is already in state->watches 
+	 */
 	state->wd = inotify_add_watch(
 		state->fd, "/var/html/c2v/templates",
 		IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
@@ -120,7 +126,8 @@ static void app_reload(AppState *state)
 static bool app_update(AppState *state)
 {
 	fprintf(stderr, "%s :app_update\n", get_formatted_time());
-	int ret = epoll_wait(state->efd, state->ev, MAX_EVENTS, 1000);
+	struct inotify_event *event;
+	int ret = epoll_wait(state->efd, state->ev, MAX_EVENTS, EPOLL_WAIT_MS);
 	if (ret > 0) {
 		int length = read(state->fd, state->buffer, BUF_LEN);
 		if (length < 0) {
@@ -128,7 +135,7 @@ static bool app_update(AppState *state)
 			return false;
 		}
 		for (int i=0; i < length; i++) {
-			struct inotify_event *event = (struct inotify_event *)&state->buffer[i];
+			event = (struct inotify_event *)&state->buffer[i];
 			if (event->len) {
 				fprintf(stderr, "inotify_event len:%d mask:%d\n",
 						event->len, event->mask);

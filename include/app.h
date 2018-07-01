@@ -4,7 +4,7 @@
 #include <sys/inotify.h>
 #include <libpq-fe.h>
 
-#include "reload.h"
+#include "reload/reload.h"
 
 typedef struct AppConfig
 {

@@ -5,12 +5,12 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "reload.h"
+#include "reload/reload.h"
 
 Reloader *reloader;
 const char *lib = "./build/libresource-mgr.so";
 const char *api_var = "app_api";
-unsigned int check_rate = 1000;
+unsigned int check_rate = 5000; // check every 5 seconds.
 
 static void handle_signal(int signal)
 {

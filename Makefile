@@ -7,7 +7,7 @@ APP		= resource-mgr
 SRCDIR		= src
 INCDIR 		= ./include
 OBJDIR		= build
-PLUGIN_DIR	= plugins
+DEPSDIR		= ./deps
 LIB 		= $(OBJDIR)/libresource-mgr.so
 CC		= gcc
 
@@ -15,7 +15,7 @@ CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Werror -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic 
 CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address 
-CFLAGS  += -I`pg_config --includedir`
+CFLAGS  += -I`pg_config --includedir` 
 
 LDFLAGS = -ldl -lpq -pthread
 LDFLAGS += $(shell pkg-config libpq --libs)
@@ -29,21 +29,22 @@ all: $(APP) $(LIB)
 # Application main build.
 $(APP): $(OBJDIR)/main.o $(OBJDIR)/reload.o 
 	$(CC) -rdynamic $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 $(OBJDIR)/main.o: $(SRCDIR)/main.c 
-	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR)
+	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
 # App.so build
 $(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
 
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
-	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
 $(OBJDIR)/ini.o: $(SRCDIR)/ini.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 
-$(OBJDIR)/reload.o: $(SRCDIR)/reload.c
-	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
+$(OBJDIR)/reload.o: $(DEPSDIR)/reload/reload.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/reload/
 
 # make build dir
 $(OBJDIR):
