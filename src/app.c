@@ -68,6 +68,7 @@ static void app_unload(AppState *state)
 	// stop any notifications
 	// release state->config // set conf = NULL;
 	// close postgres connection
+	free(state->config->db_conn_info);
 	PQfinish(state->conn);
 }
 
