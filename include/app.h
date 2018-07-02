@@ -9,6 +9,8 @@
 typedef struct AppConfig
 {
 	char *db_conn_info;
+	char *template_root;
+	char *query_root;
 } AppConfig;
 
 struct AppState

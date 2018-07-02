@@ -39,17 +39,24 @@ static int ini_parse_handler(void *user, const char *section, const char *name, 
 static int ini_parse_handler(void *user, const char *section,
 							const char *name, const char *value)
 {
-	if (strcmp(name, "db-address") == 0) {
-		char **conf = (char **)user;
-		*conf = strdup(value);
+	AppConfig *config = (AppConfig *)user;
+	#define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+	if (MATCH("", "db-address")) {
+		config->db_conn_info = strdup(value);
+	} else if (MATCH("template", "root")) {
+		config->template_root = strdup(value);
+	} else if (MATCH("query", "root")) {
+		config->query_root = strdup(value);
+	} else {
+		return 0;
 	}
 	return 1;
 }
 
 static AppState *app_create(void)
 {
-	AppState *state = malloc(sizeof(*state));
-	state->config = malloc(sizeof(state->config));
+	AppState *state = calloc(1, sizeof(*state));
+	state->config = calloc(1, sizeof(*state->config));
 	state->buffer = calloc(1, BUF_LEN);
 	state->ev = calloc(MAX_EVENTS, sizeof(*state->ev));
 	fprintf(stderr, "app_create(state: %p)\n", (void *)state);
@@ -61,6 +68,8 @@ static void app_delete(AppState *state)
 	fprintf(stderr, "app_delete(state: %p)\n", (void *)state);
 	PQfinish(state->conn);
 	free(state->config->db_conn_info);
+	free(state->config->template_root);
+	free(state->config->query_root);
 	free(state->config);
 	free(state->buffer);
 	free(state->ev);
@@ -77,6 +86,8 @@ static void app_unload(AppState *state)
 	// close(state->efd); // epoll
 	// close(state->fd);  // inotify
 	free(state->config->db_conn_info);
+	free(state->config->template_root);
+	free(state->config->query_root);
 	PQfinish(state->conn);
 }
 
@@ -84,10 +95,13 @@ static void app_reload(AppState *state)
 {
 	fprintf(stderr, "app_reload(state: %p)\n", (void *)state);
 	// load conf and set state->config
-	//state->config->db_conn_info = ini_get_db_conf_from_file(CONF_FILE);
-	if (ini_parse(CONF_FILE, ini_parse_handler, &state->config->db_conn_info) < 0) {
+	if (ini_parse(CONF_FILE, ini_parse_handler, state->config) < 0) {
 		fprintf(stderr, "error loading config file.\n");
 	}
+	fprintf(stderr,
+			"AppConfig {db_conn_info=%s, template_root=%s, query_root=%s} @ %p \n",
+			state->config->db_conn_info, state->config->template_root,
+			state->config->query_root, (void *)state->config);
 	// setup postgres db connection
 	PGresult *res;
 	fprintf(stderr, "Connecting to: %s\n", state->config->db_conn_info);
