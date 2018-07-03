@@ -21,7 +21,6 @@
 
 static char* get_formatted_time(void)
 {
-
     time_t rawtime;
     struct tm* timeinfo;
 
@@ -36,17 +35,16 @@ static char* get_formatted_time(void)
 }
 static int ini_parse_handler(void *user, const char *section, const char *name, const char *value);
 
-static int ini_parse_handler(void *user, const char *section,
-							const char *name, const char *value)
+static int ini_parse_handler(void *user, const char *section, const char *name, const char *value)
 {
 	AppConfig *config = (AppConfig *)user;
 	#define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
 	if (MATCH("", "db-address")) {
-		config->db_conn_info = strdup(value);
+		strcpy(config->db_conn_info, value);
 	} else if (MATCH("template", "root")) {
-		config->template_root = strdup(value);
+		strcpy(config->template_root, value);
 	} else if (MATCH("query", "root")) {
-		config->query_root = strdup(value);
+		strcpy(config->query_root, value);
 	} else {
 		return 0;
 	}
@@ -55,10 +53,10 @@ static int ini_parse_handler(void *user, const char *section,
 
 static AppState *app_create(void)
 {
-	AppState *state = calloc(1, sizeof(*state));
-	state->config = calloc(1, sizeof(*state->config));
+	AppState *state = calloc(1, sizeof *state);
+	state->config = calloc(1, sizeof *state->config);
 	state->buffer = calloc(1, BUF_LEN);
-	state->ev = calloc(MAX_EVENTS, sizeof(*state->ev));
+	state->ev = calloc(MAX_EVENTS, sizeof *state->ev);
 	fprintf(stderr, "app_create(state: %p)\n", (void *)state);
 	return state;
 }
@@ -67,9 +65,6 @@ static void app_delete(AppState *state)
 {
 	fprintf(stderr, "app_delete(state: %p)\n", (void *)state);
 	PQfinish(state->conn);
-	free(state->config->db_conn_info);
-	free(state->config->template_root);
-	free(state->config->query_root);
 	free(state->config);
 	free(state->buffer);
 	free(state->ev);
@@ -85,9 +80,9 @@ static void app_unload(AppState *state)
 	// close postgres connection
 	// close(state->efd); // epoll
 	// close(state->fd);  // inotify
-	free(state->config->db_conn_info);
-	free(state->config->template_root);
-	free(state->config->query_root);
+	memset(state->config->db_conn_info, 0, 256);
+	memset(state->config->template_root, 0, 256);
+	memset(state->config->query_root, 0, 256);
 	PQfinish(state->conn);
 }
 
@@ -147,7 +142,6 @@ static void app_reload(AppState *state)
 	state->ev->events = EPOLLIN | EPOLLOUT | EPOLLET;
 	state->cfg = epoll_ctl(state->efd, EPOLL_CTL_ADD, state->fd, state->ev);
 }
-
 
 static bool app_update(AppState *state)
 {
