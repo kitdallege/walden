@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "app.h"
+#include "walker.h"
 #include "inih/ini.h"
 
 #define EPOLL_WAIT_MS 1000 
@@ -18,6 +19,7 @@
 #define MAX_EVENTS 64
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN    (1024 * (EVENT_SIZE + 16))
+
 
 static char* get_formatted_time(void)
 {
@@ -50,11 +52,42 @@ static int ini_parse_handler(void *user, const char *section, const char *name, 
 	}
 	return 1;
 }
+static void add_watches(AppState *state)
+{
+	// add watches for template dirs.
+	Dirs *dirs = find_dirs(state->config->template_root);
+	int template_dirs_len = dirs->count;
+	for (int i=0; i < template_dirs_len; i++) {
+		int wd = inotify_add_watch(
+			state->fd, dirs->paths[i],
+			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
+		);
+		Watch *watch = malloc(sizeof *watch);
+		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
+		watch->next = state->watches;
+		state->watches = watch;
+	}
+	free_dirs(dirs);
+	dirs = find_dirs(state->config->query_root);
+	for (unsigned int i=0; i < dirs->count; i++) {
+		int wd = inotify_add_watch(
+			state->fd, dirs->paths[i],
+			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
+		);
+		Watch *watch = malloc(sizeof *watch);
+		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
+		watch->next = state->watches;
+		state->watches = watch;
+	}
+	free_dirs(dirs);
+}
+
 
 static AppState *app_create(void)
 {
 	AppState *state = calloc(1, sizeof *state);
 	state->config = calloc(1, sizeof *state->config);
+	state->watches = calloc(1, sizeof *state->watches);
 	state->buffer = calloc(1, BUF_LEN);
 	state->ev = calloc(MAX_EVENTS, sizeof *state->ev);
 	fprintf(stderr, "app_create(state: %p)\n", (void *)state);
@@ -68,6 +101,13 @@ static void app_delete(AppState *state)
 	free(state->config);
 	free(state->buffer);
 	free(state->ev);
+	Watch *temp, *watch = state->watches;
+	while (watch) {
+		temp = watch->next;
+		free(watch);
+		watch = temp;
+	}
+	//free(state->watches);
 	free(state);
 	state = NULL;
 }
@@ -78,8 +118,8 @@ static void app_unload(AppState *state)
 	// stop any notifications
 	// release state->config // set conf = NULL;
 	// close postgres connection
-	// close(state->efd); // epoll
-	// close(state->fd);  // inotify
+	close(state->efd); // epoll
+	close(state->fd);  // inotify
 	memset(state->config->db_conn_info, 0, 256);
 	memset(state->config->template_root, 0, 256);
 	memset(state->config->query_root, 0, 256);
@@ -130,10 +170,7 @@ static void app_reload(AppState *state)
 	 * @reload: we can either mass remove / add the watches again
 	 * or only add/remove the diff from what is already in state->watches 
 	 */
-	state->wd = inotify_add_watch(
-		state->fd, "/var/html/c2v/templates",
-		IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
-	);
+	add_watches(state);
 	// set up epoll
 	state->efd = epoll_create(1);
 	if (state->efd < 0) {
@@ -146,7 +183,7 @@ static void app_reload(AppState *state)
 static bool app_update(AppState *state)
 {
 	fprintf(stderr, "%s :app_update\n", get_formatted_time());
-	struct inotify_event *event;
+	struct inotify_event *evt;
 	int ret = epoll_wait(state->efd, state->ev, MAX_EVENTS, EPOLL_WAIT_MS);
 	if (ret > 0) {
 		int length = read(state->fd, state->buffer, BUF_LEN);
@@ -154,16 +191,44 @@ static bool app_update(AppState *state)
 			perror( "read");
 			return false;
 		}
-		for (int i=0; i < length; i++) {
-			event = (struct inotify_event *)&state->buffer[i];
-			if (event->len) {
-				fprintf(stderr, "inotify_event len:%d mask:%d\n",
-						event->len, event->mask);
+		int i = 0;
+		while (i < length ) {
+			evt = (struct inotify_event *)&state->buffer[i];
+			if (!evt->len) {
+				fprintf(stderr, "evt->len is 0\n");
+				continue;
 			}
-			// determine wtf happened.
+			fprintf(
+				stderr,
+				"inotify_event wd:%d mask:%d cookie:%d len:%d name:%s \n",
+				evt->wd, evt->mask, evt->cookie, evt->len, evt->name
+			);
+			fprintf(
+				stderr,
+				"switch value: %#010x \n", evt->mask & (
+					IN_ALL_EVENTS | IN_UNMOUNT | IN_Q_OVERFLOW | IN_IGNORED
+				)
+			);
+			switch (evt->mask & (IN_ALL_EVENTS | IN_UNMOUNT | IN_Q_OVERFLOW | IN_IGNORED)) {
+				case IN_CREATE:
+					fprintf(stderr, "IN_CREATE \n");
+					break;
+				case IN_DELETE:
+					fprintf(stderr, "IN_DELETE \n");
+				case IN_ISDIR:
+					fprintf(stderr, "IN_ISDIR\n");
+					break;
+				case IN_CLOSE_WRITE:
+					fprintf(stderr, "IN_CLOSE_WRITE\n");
+					break;
+				default:
+					fprintf(stderr, "unhandled event type\n");
+					break;
+			}
+			i += (sizeof (struct inotify_event)) + evt->len;
 		}
 	} else if (ret < 0) {
-		fprintf(stderr, "error in polling");
+		fprintf(stderr, "error in polling \n");
 		return false;
 	} else {
 		fprintf(stderr, "poll timed out. \n");

@@ -13,10 +13,18 @@ typedef struct AppConfig
 	char query_root[256];
 } AppConfig;
 
+typedef struct Watch
+{
+	int wd;
+	char *path;
+	struct Watch *next;
+} Watch;
+
 struct AppState
 {
 	AppConfig *config;
-	int fd, wd, efd, cfg;
+	Watch *watches;
+	int fd, efd, cfg;
 	pid_t pid;
 	PGconn *conn;
 	char *buffer;

@@ -16,7 +16,7 @@ CC		= gcc
 CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Werror -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic 
-CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address 
+CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address -ggdb 
 CFLAGS  += -I`pg_config --includedir` 
 
 LDFLAGS = -ldl -lpq -pthread
@@ -36,10 +36,13 @@ $(OBJDIR)/main.o: $(SRCDIR)/main.c
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
 # App.so build
-$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o
+$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
 
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
+
+$(OBJDIR)/walker.o: $(SRCDIR)/walker.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
 #$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
