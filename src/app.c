@@ -9,8 +9,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <libpq-fe.h>
+
 #include "app.h"
+#include "core.h"
 #include "walker.h"
+#include "watcher.h"
+#include "handlers.h"
 #include "inih/ini.h"
 
 #define EPOLL_WAIT_MS 1000 
@@ -19,7 +24,6 @@
 #define MAX_EVENTS 64
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN    (1024 * (EVENT_SIZE + 16))
-
 
 static char* get_formatted_time(void)
 {
@@ -35,7 +39,6 @@ static char* get_formatted_time(void)
 
     return _retval;
 }
-static int ini_parse_handler(void *user, const char *section, const char *name, const char *value);
 
 static int ini_parse_handler(void *user, const char *section, const char *name, const char *value)
 {
@@ -52,37 +55,8 @@ static int ini_parse_handler(void *user, const char *section, const char *name, 
 	}
 	return 1;
 }
-static void add_watches(AppState *state)
-{
-	// add watches for template dirs.
-	Dirs *dirs = find_dirs(state->config->template_root);
-	int template_dirs_len = dirs->count;
-	for (int i=0; i < template_dirs_len; i++) {
-		int wd = inotify_add_watch(
-			state->fd, dirs->paths[i],
-			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
-		);
-		Watch *watch = malloc(sizeof *watch);
-		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
-		watch->next = state->watches;
-		state->watches = watch;
-	}
-	free_dirs(dirs);
-	dirs = find_dirs(state->config->query_root);
-	for (unsigned int i=0; i < dirs->count; i++) {
-		int wd = inotify_add_watch(
-			state->fd, dirs->paths[i],
-			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
-		);
-		Watch *watch = malloc(sizeof *watch);
-		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
-		watch->next = state->watches;
-		state->watches = watch;
-	}
-	free_dirs(dirs);
-}
 
-
+// App API functions.
 static AppState *app_create(void)
 {
 	AppState *state = calloc(1, sizeof *state);
@@ -107,7 +81,6 @@ static void app_delete(AppState *state)
 		free(watch);
 		watch = temp;
 	}
-	//free(state->watches);
 	free(state);
 	state = NULL;
 }
@@ -162,16 +135,9 @@ static void app_reload(AppState *state)
 	if (state->fd < 0) {
 		perror("inotify_init");
 	}
-	/*
-	 * Need to recursively scan and add a watch to every subdirectory
-	 * as well as the root.
-	 * TODO: create a struct watched { int fd; char *file} and add
-	 * an array of um to the state.
-	 * @reload: we can either mass remove / add the watches again
-	 * or only add/remove the diff from what is already in state->watches 
-	 */
+	// setup inotify
 	add_watches(state);
-	// set up epoll
+	// setup epoll
 	state->efd = epoll_create(1);
 	if (state->efd < 0) {
 		perror("could not init epoll fd");
@@ -182,14 +148,15 @@ static void app_reload(AppState *state)
 
 static bool app_update(AppState *state)
 {
-	fprintf(stderr, "%s :app_update\n", get_formatted_time());
+	fprintf(stderr, "%s :app_update enter\n", get_formatted_time());
 	struct inotify_event *evt;
 	int ret = epoll_wait(state->efd, state->ev, MAX_EVENTS, EPOLL_WAIT_MS);
 	if (ret > 0) {
 		int length = read(state->fd, state->buffer, BUF_LEN);
 		if (length < 0) {
-			perror( "read");
-			return false;
+			fprintf(stderr, "error: read length: %d\n", length);
+			fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
+			return true;
 		}
 		int i = 0;
 		while (i < length ) {
@@ -198,43 +165,15 @@ static bool app_update(AppState *state)
 				fprintf(stderr, "evt->len is 0\n");
 				continue;
 			}
-			fprintf(
-				stderr,
-				"inotify_event wd:%d mask:%d cookie:%d len:%d name:%s \n",
-				evt->wd, evt->mask, evt->cookie, evt->len, evt->name
-			);
-			fprintf(
-				stderr,
-				"switch value: %#010x \n", evt->mask & (
-					IN_ALL_EVENTS | IN_UNMOUNT | IN_Q_OVERFLOW | IN_IGNORED
-				)
-			);
-			switch (evt->mask & (IN_ALL_EVENTS | IN_UNMOUNT | IN_Q_OVERFLOW | IN_IGNORED)) {
-				case IN_CREATE:
-					fprintf(stderr, "IN_CREATE \n");
-					break;
-				case IN_DELETE:
-					fprintf(stderr, "IN_DELETE \n");
-				case IN_ISDIR:
-					fprintf(stderr, "IN_ISDIR\n");
-					break;
-				case IN_CLOSE_WRITE:
-					fprintf(stderr, "IN_CLOSE_WRITE\n");
-					break;
-				default:
-					fprintf(stderr, "unhandled event type\n");
-					break;
-			}
+			handle_event(state, evt);
 			i += (sizeof (struct inotify_event)) + evt->len;
 		}
 	} else if (ret < 0) {
 		fprintf(stderr, "error in polling \n");
-		return false;
 	} else {
 		fprintf(stderr, "poll timed out. \n");
-		return true;
 	}
-
+	fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
 	return true;
 }
 

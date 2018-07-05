@@ -36,15 +36,20 @@ $(OBJDIR)/main.o: $(SRCDIR)/main.c
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
 # App.so build
-$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o
+$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
 
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
+$(OBJDIR)/handlers.o: $(SRCDIR)/handlers.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
+
 $(OBJDIR)/walker.o: $(SRCDIR)/walker.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
+$(OBJDIR)/watcher.o: $(SRCDIR)/watcher.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 #$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
 #	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 
