@@ -5,12 +5,51 @@
 #include <libpq-fe.h>
 
 #include "handlers.h"
-#include "core.h"
+//#include "core.h"
+//#include "watcher.h"
 
-static void add_watch(AppState *state, char *dirname);
+//static void add_watch(AppState *state, char *dirname);
+typedef struct inotify_event InotifyEvent;
 
-void handle_event(AppState *state, InotifyEvent *evt)
+struct Handler
 {
+	const char *db_conn_info;
+	PGconn *conn;
+};
+
+Handler *handler_aloc()
+{
+	Handler *self = calloc(1, sizeof *self);
+	self->conn  = NULL;
+	return self;
+}
+
+void handler_conf(Handler *self, void *user)
+{
+	self->db_conn_info = (const char *)user;
+	PGresult *res;
+	fprintf(stderr, "Connecting to: %s\n", self->db_conn_info);
+	self->conn = PQconnectdb(self->db_conn_info);
+	if (PQstatus(self->conn) != CONNECTION_OK) {
+		fprintf(stderr, "Connection to database failed: %s",
+				PQerrorMessage(self->conn));
+		return ;
+	}
+	// set search_path
+	res = PQexec(self->conn, "set search_path = c2v");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "set search_path failed: %s\n",
+				PQerrorMessage(self->conn));
+		PQclear(res);
+		return ;
+	}
+	PQclear(res);
+	fprintf(stderr, "db conn successful. \n");
+}
+
+void handler_step(Handler *self, void *user)
+{
+	InotifyEvent *evt = (InotifyEvent *)user;
 	int mask = evt->mask & (IN_ALL_EVENTS | IN_UNMOUNT | IN_Q_OVERFLOW | IN_IGNORED);
 	fprintf(
 		stderr,
@@ -22,7 +61,7 @@ void handle_event(AppState *state, InotifyEvent *evt)
 		case IN_ISDIR: {
 			// add watch
 			fprintf(stderr, "IN_ISDIR\n");
-			add_watch(state, evt->name);
+			//add_watch(state, evt->name);
 			break;
 		}
 		case IN_CLOSE_WRITE:
@@ -39,6 +78,17 @@ void handle_event(AppState *state, InotifyEvent *evt)
 	}
 }
 
+void handler_zero(Handler *self)
+{
+
+}
+
+void handler_free(Handler *self)
+{
+
+}
+
+/*
 static void add_watch(AppState *state, char *dirname)
 {
 	// TODO: check for existing watch for dir ?
@@ -51,6 +101,6 @@ static void add_watch(AppState *state, char *dirname)
 	watch->next = state->watches;
 	state->watches = watch;
 }
-
+*/
 
 

@@ -28,15 +28,19 @@ S_OBJS 	= $(SRCS:src/%.c=$(OBJDIR)/%.o)
 
 all: $(APP) $(LIB)
 
+#########################################
 # Application main build.
+#########################################
 $(APP): $(OBJDIR)/main.o $(OBJDIR)/reload.o 
 	$(CC) -rdynamic $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(OBJDIR)/main.o: $(SRCDIR)/main.c 
 	$(CC) $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
 
+#########################################
 # App.so build
-$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o
+#########################################
+$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o $(OBJDIR)/config.o $(OBJDIR)/hash_table.o $(OBJDIR)/fnv_hash.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
 
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
@@ -50,14 +54,19 @@ $(OBJDIR)/walker.o: $(SRCDIR)/walker.c
 
 $(OBJDIR)/watcher.o: $(SRCDIR)/watcher.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
-#$(OBJDIR)/ini.o: $(SRCDIR)/ini.c
-#	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR)
 
+$(OBJDIR)/config.o: $(SRCDIR)/config.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(INCDIR) -I$(DEPSDIR)
+
+#########################################
 # Deps
+#########################################
 $(OBJDIR)/reload.o: $(DEPSDIR)/reload/reload.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/reload/
 
 $(OBJDIR)/hash_table.o: $(DEPSDIR)/hash_table/hash_table.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/hash_table/
+$(OBJDIR)/fnv_hash.o: $(DEPSDIR)/hash_table/fnv_hash.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/hash_table/
 
 $(OBJDIR)/ini.o: $(DEPSDIR)/inih/ini.c

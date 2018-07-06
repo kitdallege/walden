@@ -9,14 +9,14 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <libpq-fe.h>
+//#include <libpq-fe.h>
 
 #include "app.h"
 #include "core.h"
-#include "walker.h"
+#include "config.h"
+//#include "walker.h"
 #include "watcher.h"
-#include "handlers.h"
-#include "inih/ini.h"
+//#include "handlers.h"
 
 #define EPOLL_WAIT_MS 1000 
 #define CONF_FILE "./resource-mgr.conf"
@@ -40,69 +40,40 @@ static char* get_formatted_time(void)
     return _retval;
 }
 
-static int ini_parse_handler(void *user, const char *section, const char *name, const char *value)
-{
-	AppConfig *config = (AppConfig *)user;
-	#define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
-	if (MATCH("", "db-address")) {
-		strcpy(config->db_conn_info, value);
-	} else if (MATCH("template", "root")) {
-		strcpy(config->template_root, value);
-	} else if (MATCH("query", "root")) {
-		strcpy(config->query_root, value);
-	} else {
-		return 0;
-	}
-	return 1;
-}
-
 // App API functions.
 static AppState *app_create(void)
 {
-	AppState *state = calloc(1, sizeof *state);
-	state->config = calloc(1, sizeof *state->config);
-	state->watches = calloc(1, sizeof *state->watches);
-	state->buffer = calloc(1, BUF_LEN);
-	state->ev = calloc(MAX_EVENTS, sizeof *state->ev);
-	fprintf(stderr, "app_create(state: %p)\n", (void *)state);
-	return state;
+	AppState *self = calloc(1, sizeof *self);
+	self->configurator = configurator_aloc();
+	self->watcher = watcher_aloc(); 
+	fprintf(stderr, "app_create(self: %p)\n", (void *)self);
+	return self;
 }
 
-static void app_delete(AppState *state)
+static void app_delete(AppState *self)
 {
-	fprintf(stderr, "app_delete(state: %p)\n", (void *)state);
-	PQfinish(state->conn);
-	free(state->config);
-	free(state->buffer);
-	free(state->ev);
-	Watch *temp, *watch = state->watches;
-	while (watch) {
-		temp = watch->next;
-		free(watch);
-		watch = temp;
-	}
-	free(state);
-	state = NULL;
+	fprintf(stderr, "app_delete(self: %p)\n", (void *)self);
+	configurator_free(self->configurator);
+	watcher_free(self->watcher);
+	free(self);
+	self = NULL;
 }
 
-static void app_unload(AppState *state)
+static void app_unload(AppState *self)
 {
-	fprintf(stderr, "app_unload(state: %p)\n", (void *)state);
-	// stop any notifications
-	// release state->config // set conf = NULL;
-	// close postgres connection
-	close(state->efd); // epoll
-	close(state->fd);  // inotify
-	memset(state->config->db_conn_info, 0, 256);
-	memset(state->config->template_root, 0, 256);
-	memset(state->config->query_root, 0, 256);
-	PQfinish(state->conn);
+	fprintf(stderr, "app_unload(self: %p)\n", (void *)self);
+	watcher_zero(self->watcher);
+	configurator_zero(self->configurator);
 }
 
-static void app_reload(AppState *state)
+static void app_reload(AppState *self)
 {
-	fprintf(stderr, "app_reload(state: %p)\n", (void *)state);
-	// load conf and set state->config
+	fprintf(stderr, "app_reload(self: %p) start\n", (void *)self);
+	configurator_conf(self->configurator, CONF_FILE);
+	Config *conf = configurator_get_config(self->configurator);
+	watcher_conf(self->watcher, conf);
+	fprintf(stderr, "app_reload(self: %p) end\n", (void *)self);
+	/*/ load conf and set state->config
 	if (ini_parse(CONF_FILE, ini_parse_handler, state->config) < 0) {
 		fprintf(stderr, "error loading config file.\n");
 	}
@@ -144,36 +115,13 @@ static void app_reload(AppState *state)
 	}
 	state->ev->events = EPOLLIN | EPOLLOUT | EPOLLET;
 	state->cfg = epoll_ctl(state->efd, EPOLL_CTL_ADD, state->fd, state->ev);
+	*/
 }
 
-static bool app_update(AppState *state)
+static bool app_update(AppState *self)
 {
 	fprintf(stderr, "%s :app_update enter\n", get_formatted_time());
-	struct inotify_event *evt;
-	int ret = epoll_wait(state->efd, state->ev, MAX_EVENTS, EPOLL_WAIT_MS);
-	if (ret > 0) {
-		int length = read(state->fd, state->buffer, BUF_LEN);
-		if (length < 0) {
-			fprintf(stderr, "error: read length: %d\n", length);
-			fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
-			return true;
-		}
-		int i = 0;
-		while (i < length ) {
-			evt = (struct inotify_event *)&state->buffer[i];
-			if (!evt->len) {
-				fprintf(stderr, "evt->len is 0\n");
-				continue;
-			}
-			handle_event(state, evt);
-			i += (sizeof (struct inotify_event)) + evt->len;
-		}
-	} else if (ret < 0) {
-		fprintf(stderr, "error in polling \n");
-	} else {
-		fprintf(stderr, "poll timed out. \n");
-	}
-	fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
+	watcher_step(self->watcher, NULL);
 	return true;
 }
 
