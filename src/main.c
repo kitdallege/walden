@@ -15,6 +15,7 @@ unsigned int check_rate = 5000; // check every 5 seconds.
 static void handle_signal(int signal)
 {
 	
+	fprintf(stderr, "... caught signal: %d\n", signal);
 	reloader_shutdown(reloader);
 	//pthread_exit(NULL);
 	// cleans up some thread locals (making valgrind happy) 

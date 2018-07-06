@@ -40,7 +40,9 @@ $(OBJDIR)/main.o: $(SRCDIR)/main.c
 #########################################
 # App.so build
 #########################################
-$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o $(OBJDIR)/config.o $(OBJDIR)/hash_table.o $(OBJDIR)/fnv_hash.o
+$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o
+$(LIB): $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o
+$(LIB): $(OBJDIR)/config.o $(OBJDIR)/hash_table.o $(OBJDIR)/fnv_hash.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
 
 $(OBJDIR)/app.o: $(SRCDIR)/app.c
@@ -79,7 +81,6 @@ $(OBJDIR):
 clean:
 	@rm -f $(OBJDIR)/*
 	@rm -f $(APP)
-
 
 rebuild:
 	$(MAKE) clean

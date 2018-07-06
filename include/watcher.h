@@ -11,20 +11,10 @@ void		watcher_zero(Watcher *self);
 void		watcher_free(Watcher *self);
 
 // api 
-
-// this fits the step model pretty damn well. 0.o 
 void watcher_step(Watcher *self, void *user);
-void watcher_process_events(Watcher *self);
 
-// tech private api ?
+// tech private api (may go internal/static)
 void watcher_add_watch(Watcher *self, const char *path);
-void watcher_remove_watches(Watcher *self);
-
-// TODO: accept Watcher * as arg.
-// if 'more info' is needed from AppState pass in as vars to functions.
-//void watcher_add_watches(Watcher *self);
-//void watcher_remove_watches(Watcher *self);
-// TODO: rename to update
-//void watcher_process_events(Watcher *self);
+void watcher_remove_watch(Watcher *self, const char *path);
 
 #endif

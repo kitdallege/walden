@@ -54,7 +54,7 @@ Watcher *watcher_aloc()
 	Watcher *self	= calloc(1, sizeof *self);
 	self->watches	= hash_table_create_for_string();
 	self->buffer	= calloc(1, BUF_LEN);
-	self->ev		= calloc(MAX_EVENTS, sizeof self->ev);
+	self->ev		= calloc(MAX_EVENTS, sizeof *self->ev);
 	self->handler	= handler_aloc();
 	return self;
 }
@@ -62,7 +62,7 @@ Watcher *watcher_aloc()
 void watcher_conf(Watcher *self, void *user)
 {
 	Config *conf = (Config *)user;
-	handler_conf(self->handler, conf);
+	handler_conf(self->handler, conf->db_conn_info);
 	// setup notifications
 	self->fd = inotify_init();
 	if (self->fd < 0) {
@@ -127,55 +127,14 @@ void watcher_add_watch(Watcher *self, const char *path)
 	for (int i=0, dirs_len = dirs->count ; i < dirs_len; i++) {
 		int wd = inotify_add_watch(self->fd, dirs->paths[i], WATCH_MASK);
 		// TODO: this is probably wrong.
-		hash_table_insert(self->watches, path, &wd);
+		hash_table_insert(self->watches, dirs->paths[i], &wd);
+		fprintf(stderr, "adding watch: %s -> %d\n", dirs->paths[i], wd);
 	}
 	free_dirs(dirs);
 }
 
-void watcher_remove_watches(Watcher *self)
+void watcher_remove_watch(Watcher *self, const char *path)
 {
 
 }
 
-void watcher_process_events(Watcher *self)
-{
-
-}
-/*
- * Need to recursively scan and add a watch to every subdirectory
- * as well as the root.
- * TODO: create a struct watched { int fd; char *file} and add
- * an array of um to the state.
- * @reload: we can either mass remove / add the watches again
- * or only add/remove the diff from what is already in state->watches 
-
-void add_watches(AppState *state)
-{
-	// add watches for template dirs.
-	Dirs *dirs = find_dirs(state->config->template_root);
-	int template_dirs_len = dirs->count;
-	for (int i=0; i < template_dirs_len; i++) {
-		int wd = inotify_add_watch(
-			state->fd, dirs->paths[i],
-			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
-		);
-		Watch *watch = malloc(sizeof *watch);
-		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
-		watch->next = state->watches;
-		state->watches = watch;
-	}
-	free_dirs(dirs);
-	dirs = find_dirs(state->config->query_root);
-	for (unsigned int i=0; i < dirs->count; i++) {
-		int wd = inotify_add_watch(
-			state->fd, dirs->paths[i],
-			IN_CLOSE_WRITE | IN_MOVE | IN_DELETE | IN_ATTRIB
-		);
-		Watch *watch = malloc(sizeof *watch);
-		*watch = (Watch){.wd=wd, .path=dirs->paths[i]};
-		watch->next = state->watches;
-		state->watches = watch;
-	}
-	free_dirs(dirs);
-}
-*/

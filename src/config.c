@@ -29,20 +29,6 @@ static int ini_parse_handler( void *user, const char *section,
 	}
 	return 1;
 }
-/*
-int load_config(const char *conf_file, Config *config)
-{
-	if (ini_parse(CONF_FILE, ini_parse_handler, config) < 0) {
-		fprintf(stderr, "error loading config file.\n");
-		return -1;
-	}
-	fprintf(stderr,
-			"AppConfig {db_conn_info=%s, template_root=%s, query_root=%s} @ %p \n",
-			config->db_conn_info, config->template_root,
-			config->query_root, (void *)config);
-	return 0;
-}
-*/
 
 Configurator *configurator_aloc()
 {

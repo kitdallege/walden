@@ -80,12 +80,14 @@ void handler_step(Handler *self, void *user)
 
 void handler_zero(Handler *self)
 {
-
+	self->db_conn_info = NULL;	
+	PQfinish(self->conn);
 }
 
 void handler_free(Handler *self)
 {
-
+	PQfinish(self->conn);
+	free(self);
 }
 
 /*

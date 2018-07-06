@@ -34,7 +34,7 @@ Dirs* find_dirs(const char *dirpath)
 			fprintf(stderr, "missing dir:: %s \n", path);
 			continue;
 		}
-		fprintf(stderr, "path: %s size: %lu\n", path, strlen(path));
+		//fprintf(stderr, "path: %s size: %lu\n", path, strlen(path));
 		struct dirent *entry;
 		while ((entry = readdir(dir))) {
 			if (entry->d_type & DT_DIR) {
