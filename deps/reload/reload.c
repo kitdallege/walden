@@ -108,6 +108,7 @@ void load_app(App *app, const char *lib, const char *api_var)
 void unload_app(App *app)
 {
 	if (&app->api) {
+		app->api.unload(app->state);
 		app->api.delete(app->state);
 		app->state = NULL;
 	}

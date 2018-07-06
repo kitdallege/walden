@@ -15,6 +15,6 @@ void watcher_step(Watcher *self, void *user);
 
 // tech private api (may go internal/static)
 void watcher_add_watch(Watcher *self, const char *path);
-void watcher_remove_watch(Watcher *self, const char *path);
+void watcher_remove_watches(Watcher *self);
 
 #endif

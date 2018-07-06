@@ -86,7 +86,6 @@ void handler_zero(Handler *self)
 
 void handler_free(Handler *self)
 {
-	PQfinish(self->conn);
 	free(self);
 }
 

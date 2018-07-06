@@ -110,6 +110,7 @@ void watcher_zero(Watcher *self)
 {
 	// memset stuffs
 	handler_zero(self->handler);
+	watcher_remove_watches(self);
 }
 
 void watcher_free(Watcher *self)
@@ -125,16 +126,22 @@ void watcher_add_watch(Watcher *self, const char *path)
 {
 	Dirs *dirs = find_dirs(path);
 	for (int i=0, dirs_len = dirs->count ; i < dirs_len; i++) {
-		int wd = inotify_add_watch(self->fd, dirs->paths[i], WATCH_MASK);
-		// TODO: this is probably wrong.
-		hash_table_insert(self->watches, dirs->paths[i], &wd);
-		fprintf(stderr, "adding watch: %s -> %d\n", dirs->paths[i], wd);
+		int *wd = malloc(sizeof(*wd));
+		*wd = inotify_add_watch(self->fd, dirs->paths[i], WATCH_MASK);
+		hash_table_insert(self->watches, dirs->paths[i], wd);
+		fprintf(stderr, "adding watch: %s -> %d\n", dirs->paths[i], *wd);
 	}
 	free_dirs(dirs);
 }
 
-void watcher_remove_watch(Watcher *self, const char *path)
+void watcher_remove_watches(Watcher *self)
 {
-
+	struct hash_entry *entry;
+	for (entry = hash_table_next_entry(self->watches, NULL); entry != NULL;
+		 entry = hash_table_next_entry(self->watches, entry)) {
+		inotify_rm_watch(self->fd, *((int *)entry->data));	
+		free(entry->data);
+		hash_table_remove_entry(self->watches, entry);
+	}
 }
 
