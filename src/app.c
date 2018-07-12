@@ -10,7 +10,7 @@
 
 #define CONF_FILE "./resource-mgr.conf"
 #define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
-
+/*
 static char* get_formatted_time(void)
 {
     time_t rawtime;
@@ -25,7 +25,7 @@ static char* get_formatted_time(void)
 
     return _retval;
 }
-
+*/
 // App API functions.
 static AppState *app_create(void)
 {
@@ -65,9 +65,9 @@ static void app_reload(AppState *self)
 
 static bool app_update(AppState *self)
 {
-	fprintf(stderr, "%s :app_update enter\n", get_formatted_time());
+	//fprintf(stderr, "%s :app_update enter\n", get_formatted_time());
 	watcher_step(self->watcher, NULL);
-	fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
+	//fprintf(stderr, "%s :app_update exit\n", get_formatted_time());
 	return true;
 }
 

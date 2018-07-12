@@ -59,7 +59,7 @@ Handler *handler_aloc()
 
 void handler_conf(Handler *self, void *user)
 {
-	self->update_interval = 10000 * 1000000L; // 10 seconds
+	self->update_interval = 5000 * 1000000L; // in msec 
 	self->last_update = get_nanos();
 
 	self->conf = (Config *)user;
@@ -203,10 +203,13 @@ static void handler_drain_queue(Handler *self, long current_nanos)
 			// get next item in queue and free this one.
 			temp = feq;
 			feq = feq->next;
+			fprintf(stderr, "freeing: %s \n", temp->filename);
 			free(temp->filename);
 			free(temp);
 		} while (feq);
 		self->last_update = current_nanos;
+		// TODO: got the feeling were leaving a man behind. thus the NULL hack
+		self->queue = NULL;
 	}
 }
 

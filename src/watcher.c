@@ -111,6 +111,7 @@ void watcher_step(Watcher *self, void *user)
 		int i = 0;
 		while (i < length ) {
 			evt = (struct inotify_event *)&self->buffer[i];
+			i += (sizeof (struct inotify_event)) + evt->len;
 			if (!evt->len) {
 				fprintf(stderr, "evt->len is 0\n");
 				continue;
@@ -149,12 +150,11 @@ void watcher_step(Watcher *self, void *user)
 					break;
 			}
 			handler_enqueue_event(self->handler, fevent); 
-			i += (sizeof (struct inotify_event)) + evt->len;
 		}
 	} else if (ret < 0) {
 		fprintf(stderr, "error in polling \n");
 	} else {
-		fprintf(stderr, "poll timed out. \n");
+		//fprintf(stderr, "poll timed out. \n");
 	}
 	// [to reduce re-renders] the handler baches changes using a buffer. 
 	// once no activity is seen for X amount  of time, it updates the db
