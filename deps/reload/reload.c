@@ -114,7 +114,7 @@ void unload_app(App *app)
 	}
 	if (app->handle) {
 		//app->state = NULL;
-		dlclose(app->handle);
+		//dlclose(app->handle);
 		app->handle = NULL;
 		app->id = 0;
 	}

@@ -13,14 +13,20 @@ CC		= gcc
 
 # TODO: Break up c/ld flags so that were only linking the app
 # against libpq (etc).
+# -flto -march=native -Ofast
 CFLAGS  += -g -O0 -Wall -Wstrict-prototypes -Werror -Wmissing-prototypes
 CFLAGS  += -Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic 
+
+# this is needed for anonymous struct members
+CFLAGS  += -fms-extensions 
+
+# gcc memory debugging
 CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address -ggdb 
 CFLAGS  += -I`pg_config --includedir` 
 
-LDFLAGS = -ldl -lpq -pthread
-LDFLAGS += $(shell pkg-config libpq --libs)
+LDFLAGS = -ldl -lpq 
+#LDFLAGS += $(shell pkg-config libpq --libs)
 SRCS 	= $(wildcard $(SRCDIR)/*.c)
 S_OBJS 	= $(SRCS:src/%.c=$(OBJDIR)/%.o)
 
@@ -40,7 +46,7 @@ $(OBJDIR)/main.o: $(SRCDIR)/main.c
 #########################################
 # App.so build
 #########################################
-$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o
+$(LIB): $(OBJDIR)/app.o $(OBJDIR)/reload.o $(OBJDIR)/ini.o $(OBJDIR)/sha1.o
 $(LIB): $(OBJDIR)/walker.o $(OBJDIR)/handlers.o $(OBJDIR)/watcher.o
 $(LIB): $(OBJDIR)/config.o $(OBJDIR)/hash_table.o $(OBJDIR)/fnv_hash.o
 	$(CC) -shared $(CFLAGS) -Wl,-soname,$(@F) -o $@ $^ -lc
@@ -66,6 +72,9 @@ $(OBJDIR)/config.o: $(SRCDIR)/config.c
 $(OBJDIR)/reload.o: $(DEPSDIR)/reload/reload.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/reload/
 
+$(OBJDIR)/sha1.o: $(DEPSDIR)/sha1/sha1.c
+	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/sha1/
+
 $(OBJDIR)/hash_table.o: $(DEPSDIR)/hash_table/hash_table.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/hash_table/
 $(OBJDIR)/fnv_hash.o: $(DEPSDIR)/hash_table/fnv_hash.c
@@ -73,6 +82,7 @@ $(OBJDIR)/fnv_hash.o: $(DEPSDIR)/hash_table/fnv_hash.c
 
 $(OBJDIR)/ini.o: $(DEPSDIR)/inih/ini.c
 	$(CC) -fpic $(CFLAGS) -c $< -o $@ -I$(DEPSDIR)/inih/
+
 
 # make build dir
 $(OBJDIR):

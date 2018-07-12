@@ -4,3 +4,6 @@
 [submodule "deps/inih"]
 	path = deps/inih
 	url = https://github.com/benhoyt/inih.git
+[submodule "deps/sha1"]
+	path = deps/sha1
+	url = https://github.com/clibs/sha1
