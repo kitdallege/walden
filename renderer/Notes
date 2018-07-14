@@ -1,0 +1,367 @@
+date: Sunday June 03 2018
+ After working Thur/Friday on the renderer I've now hit to where i'm 
+ attempting to optimize it.
+
+To start looking @ less than 1/2 MB/second. Ideally this ends up being IO
+bound on write. A good target would be 180 MB/sec, which is around
+half of what the disk can do. [below is comments from code]
+	// we should be somewhere around 350mb/sec if were sync'n
+	// and up to multiple gigs a second if were not (source: dd). so this 
+	// can def improve. (note: the 1tb spinning hdd is about 120 MB/s)
+	// might be good for a test target.
+	// without sync in write_file & this call were @ 18 MB/s so 
+	// in theory we could 20x that before the disk was stopping us.
+	// that would put us @ 20-40 µs (microseconds) per page
+	// or roughly 25K pages per second.
+	// realistically 5K a secound (200 micros) per page is a good goal.
+	// which has us at about 180 MB/s write speed.
+
+------------------------------------------------------
+[test data set]
+
+  19,357 object(s)..  test-of: update object set active = true;
+  19,706 webpage(s) in db.
+  39,416 files
+
+------------------------------------------------------
+Single Threaded / O(n) style pg_notify:
+
+  with flag flip / with fsync
+  rate: 0.485 MB/sec
+  time: 6:40 (same 2x runs)
+
+  without flag flip / with fsync
+  rate: 0.57 - 0.58 MB/sec 
+  time: 5:35 - 5:33 
+
+  with flag flip / without fsync
+  rate: 2.5 - 2.62 MB/sec 
+  time: 1:14 - 1:18 seconds 
+
+  without flag flip / without fsync  
+  rate: 19.4 - 21.5 MB/sec 
+  time: 0:09 - 0:10 seconds 
+
+
+------------------------------------------------------
+date: Tuesday June 05 2018
+Flag Flip On Dedicated Thread / O(n) pg_notify
+ Goal: 20 MB/sec (like the last result) only properly updating the db.
+
+ rate: 19.4 MB/sec4
+ time: 0:10 (same 3x runs)
+
+ batching inserts (100, 250, 500)
+ rate: 16-17 MB/sec
+ time: 0:11 - 0:12 
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(n) pg_notify / prepared statement
+Make the flag_flipper use a prepared statement:
+
+expected: slight/no improvement (though pg's writes will be cheaper).
+
+confirmed!
+
+rate: 17-19 MB/sec
+time: 0:10 - 0:11
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify 
+ signal notification, queries for 'dirty = true' and generates page_spec's
+ from that. still processes signal threaded in O(n) fashion from there.
+
+* expect:
+    A slight improvement just from dropping the json parse of
+    page_spec. Also maybe a little bit from using a single query instead of
+    O(n) notifications.
+
+NOTE:
+    This too should use a prepared statement, as it'll always be the same
+    query w/(no dynamic args).
+
+    This might require an async query (so that results can be streamed) as
+    pulling back 'all the pages' would probably be memory intensive. 
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify / batching template & query file
+* Vectorize Queries: 
+  Currently 1 query per page. This should be reduced to 1 per batch having
+  the same query.sql file.
+* Cache template lookup/read.
+
+int handle_page(PGconn *conn, flag_flipper_state *flipper, const char *payload)
+becomes (i think)
+int handle_pages(PGconn *conn, flag_flipper_state *flipper, page_spec **pages)
+
+It should have a local char * for query.sql and template.mustache
+and then loop over pages (checking template/query just in case it changes).
+
+Otherwise its the same general process as the O(n) version (might even be able
+to reuse it somewhat).
+
+
+------------------------------------------------------
+Flag Flip On Dedicated Thread / O(1) pg_notify / Worker Threads [batching template & query]
+
+Same as above, only this time handle_pages is duplicated in multiple threads
+working off the same batch-queue. 
+
+expect: whatever were doing before, should be able to see multiples of that 
+ (some thing like: single-thread-perf * (num-of-threads * 0.8) so like each
+ additional thread ads 80% max perf to the overall.
+
+eg: 20 MB/sec * 4 threads == 64 MB/sec
+
+ideally i can do better than ^ but we'll see.
+
+------------------------------------------------------
+Other ideas for perf
+------------------------------------------------------
+Gzip output
+    This is mostly a nginx thing. But having the content pre gzip'd reduces 
+    the overhead of serving it. Also if the renderer ever gets fast enough
+    where I/O is the bottleneck then, this is a means to trade cpu for disk.
+Atomic 'lock free' queues.
+    A fair amount of churn happens @ the mutex/conditional level. If atomics could
+    be used in there stead, i'm fairly certain the amount of 'chatter' would drop
+    a ton.
+
+Prepared queries
+    One could load and pre-prepare the queies.sql files as well as the
+    dirty-flag-flipper.
+
+Templates with AST/prepared
+    Could work such that they parse into an ast and we hold that in
+    memory. ATM: it parses as it renders.
+
+Templates JIT
+    If the templates had an ast, its one step away from running that through 
+    libjit/llvm and producing machine code. So a template becomes a function
+    call taking json_object * as context. No ast to eval, just a simple hunk
+    of code to run that writes to a buffer and spits back a char * to it.
+
+------------------------
+19708
+total:
+	0.580506 41.671 0.293 11440.6
+
+parse_page_spec: avg max min total
+	0.00804252 0.182 0.006 158.502
+
+get_query_result: avg max min total
+	0.278731 24.213 0.092 5493.23
+
+render_template: avg max min total
+	0.0825074 2.654 0.044 1626.06
+write_page: avg max min total
+	0.0888526 31.154 0.057 1751.11
+write_pjax: avg max min total
+	0.0843485 0.367 0.058 1662.34
+
+----------------------------
+parse_page_spec     0.0078528 0.081 0.006 154.763
+file_exists         0.00313304 0.092 0.002 61.746
+get_query_result    0.268192 25.793 0.093 5285.53
+render_template     0.0802086 4.117 0.043 1580.75
+write_page          0.0865323 42.156 0.058 1705.38
+write_pjax          0.0838798 20.904 0.059 1653.1
+cleanup             0.00173214 0.022 0.001 34.137
+                    0.5645 46.190 0.294 11125.2 19708 count
+
+----------------------------
+self blabbing
+
+
+So the #'s are telling me that:
+  * quries are by far the most expensive
+  ** The easist to vectorize (detail view) also happens to 98% of the 
+     webpages.   
+c2v=> select count(*) from webpage where page_spec_id != 5;                                                                                                                                  
+ count
+-------
+   351
+(1 row)
+
+c2v=> select count(*) from webpage where page_spec_id = 5;                                                                                                                                   
+ count
+-------
+ 19357
+(1 row)
+
+So lets pluck that long hanging fruit first.
+
+* trigger needs changed to fire once per statement
+* main needs to query changed rows (async ? / maybe a todo after serial).
+* processing function needs to take 'rows' to work on.
+	* if query allows vectorization (cheat hard code for now)
+	  then need to build out query args.
+	  ** future: either this is an attribute of a 'query' in the system
+	     or a constraint that all queries.sql must allow where clause
+		 munging. *TBD*
+
+		 I def lean towards vectorized by default. And you use views to 
+		 wrap any crazy logic, or CTE's. This allows you to still use
+		 functions, your just calling them on all the rows returned, and then
+		 letting the 'shit @ the end of the query' determine how big of a 
+		 results-set that is.
+
+
+--- 
+once i get that, then its just a matter of taking that processing function
+and converting it to working off a queue/controller instead of by invoke.
+
+Then i can thread it out and see how well it scales in the face of
+parallelization.
+
+??? need to think about 'below', as were typically wanting to work on a 
+full 'struct' worth of shit per iteration. So as long as the struct isn't
+all padded out wrong, in theory it should work 'as well' as an AOS as a SOA..
+
+[TODO: rework to be a SOA instead of AOS. There is no reason not to 
+vectorize the code as most of what were doing is operating sequentially over
+an array of spec's.. Its not that far off to just have an 'array' per 
+attribute, and store shit contigiously in them.]
+
+PageSpec
+could pre-allocate 'blocks' of PageSpec(s)
+struct PageSpecBlock {
+	size_t len;
+	PageSpec specs[MAX_BLK_SIZE];
+}
+static PageSpecBlock spec_block_pool[POOL_SIZE];
+
+then @ main webpage results level we just worry about filling a block 
+when one is avl (and shoving it into the queue in the future).
+
+This removes all the 'block' allocations & pagespec allocations, converting
+them into essentially an O(1) from an O(n)..
+
+Could hold more information in the block, eg: if all webpage.page_spec_id's are
+the same, than we can load the query/template once and reuse it for 'every'
+item.
+
+'more than that': if all page_spec_id's are the same then we know that all
+template/queries are the same, thus we don't need to parse them on a O(n) 
+basis.
+
+
+---
+Memory arena - or learning to live without malloc...
+
+It might be nice to remove as many calls to malloc as possible and just do
+the 'alloc an arena' up front. There will still be malloc's from the 
+json lib, as well as postgres, but one could elimitate a lot of memory
+churn as well as a whole class of bugs. Also typically carving up a large
+block of memory results in you being able to pack shit the way you want
+it to be.
+
+mustache - could benefit from this as well, as it does a fair mount of 
+memory allocation during parse/render. It'd be far easier to just take
+a chunk of memory and 'use it' and then when your done free the single 
+chunk, instead of a ton of malloc/free's....
+
+
+----
+There is no way to side step PGresult using malloc. So need to make use
+of the memory it does alloc as much as possible (eg: avoid copy/dup).
+
+need a way to determine all the 'chunks of' PGresults are finished processing
+before we free it.
+
+How about if we just 'query' such that the PGresults are 'our' chunks.
+
+ideally each block 'results set' contains a single 'page_spec_id' such that
+we can optimize the lookups without having to sniff every iteraction for 
+change.
+
+
+---
+stuff from the detail query
+
+
+/*
+ nav could be factored out as a 'pre-rendered' widget saving us having to
+ replicate in each result.
+
+ globals too, seem like something that should be 'by convention/default'
+ eg: i want it in the context for the page, but i dont' want to have to bloat
+     my 'per-item' with it since its global to 'all pages'.
+
+At iter8 level it'd be a data/globals.json type of convention. maybe we can
+make it such that its the same logic. /queries/globals.sql
+
+The 'query' in 'globals.sql' returns a 'jsonb' object, which we use as
+global context vars for the site.
+
+--- ponders a bit....
+
+> v2 idea before/leading to the blab up ^
+  v1 is:  select webpage_context_item_detail();
+with nav as (
+		select data from config where config.name = 'nav'
+	),
+	items as (
+		select row_to_json(object.*) from object
+	)
+	select (jsonb_build_object(
+		'nav', (select data from config where config.name = 'nav'),
+		'item', (select row_to_json(object.*) from object where id = v_id)
+		) || (select data from config where name = 'context_globals'));
+
+-- so this become it. the where id shit gets added by the code.
+-- as does the globals.
+select row_to_json(object.*) from object
+-- and the nav requierments are pushed 'out' to the template/pre-render
+-- include..
+
+
+-- hmm's some more... (got to think about other views in this schematic).
+so the next question is how to tie the context-per-page to the webpage/page_spec.
+
+it almost has to be such that ya need to have a pre-defined 'key' column
+which is the same as the 'query_params' is using.
+
+most of the time its the pk..
+
+since thats my common case thats what we'll dev first.
+it reminds me of the get_in_bulk API from django
+ instead of worrying about order we want to re-assoicate the results with the
+ webpage that it belongs to via its 'query_params'.
+
+With 'get_in_bulk' types, we could pull the pk = # into a single
+pk = ANY({}), which is a fair amount faster (single index only scan) vs. a
+bitmap index can per 'or(d)' condition. .
+
+
+Its between this and having an 'object_taxon' which would allow us to pull
+though taxons into webpages.
+
+I dislike having the db bound like that, and would rather it be free-er
+with just a way to denote how to 'treate a page_spec/taxon' @
+renderer level..
+
+Eg: ya have index, list, detail view types.
+    even if we support different behavior specialized for each, its not that
+    bad, for the tradeoff of keeping the interface into it light/simple.
+
+I don't foresee writing a lot of taxon-types, its one of those things where
+ya can only aggregate data in so many ways, most of which can be made to fit
+a normalized API just by virtue of postgres CTE/Views.
+
+
+So I'm not ANTI specialized solutions per type vs generalized solution for all.
+
+atm the generalized solution is causing me to run 19K queries where 1 would
+do.
+
+0.o
+
+create type taxon_type as enum ('index', 'detail', 'list-by-occurrence_date');
+
+so i can switch based on 'taxon type' and slowly introduce vectorization.
+
+
+
+*/
+
