@@ -2,6 +2,7 @@
 #include <string.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "deps/hash_table/hash_table.h"
 #include "deps/hash_table/fnv_hash.h"
@@ -10,26 +11,34 @@
 
 #include "log.h"
 #include "templates.h"
-#include "page_spec.h"
 #include "files.h"
 #include "flag_flipper.h"
 #include "query.h"
 #include "renderer.h"
 
+#define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
+#define LISTEN_CMD_1 "listen webpage_dirty"
+#define LISTEN_CMD_2 "listen webpages_dirty"
+
+#define GET_SPEC_IDS_SQL "select distinct page_spec_id "\
+		"from webpage where dirty = true;"
+
+#define CHUNK_SIZE 2000
+#define GET_DIRTY_SQL  "select p.id, p.name || '.html' as filename, "\
+		"replace(p.parent_path::text, '.', '/') as path, "\
+		"spec.template, spec.query, p.query_params "\
+	"from webpage as p join page_spec as spec on spec.id = p.page_spec_id "\
+	"where p.dirty = true and p.page_spec_id = $1 and p.id > $2 "\
+	"order by p.page_spec_id, p.taxon_id, p.id "\
+	"limit 2000; "\
+
+#define GET_GLOBAL_CONTEXT_SQL "select data from config where name = 'context_globals';"
 static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
 static char query_dir[] = "queries";
-/*
-#define GET_DIRTY_SQL  "
-select
-	p.id,
-	p.name || '.html' as filename, 
-	"replace(p.parent_path::text, '.', '/') as path, 
-	"spec.template,
-	spec.query,
-	p.query_params "\
- */
+
+
 static bool is_scalar(int page_spec_id)
 {
 	bool ret = false;
@@ -99,8 +108,8 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 	return 0;
 }
 
-int augment_query(char **query_file, char **query_params, int params_len);
-int augment_query(char **query_file, char **query_params, int params_len)
+//int augment_query(char **query_file, char **query_params, int params_len);
+static int augment_query(char **query_file, char **query_params, int params_len)
 {
 	int param_len = 0;
 	size_t temp_size = sizeof(char *) * (params_len * 40);
@@ -256,99 +265,6 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
 	return 0;
 }
 
-int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload)
-{
-	timespec ct1, ct2, pt1, pt2, td1, td2;
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// parse payload into a struct
-	PageSpec *spec = parse_page_spec(payload);
-	if (!spec) {
-		fprintf(stderr, "unable to parse page_spec\n");
-		return 0;
-	}
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\tparse_page_spec: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// check template & query exist
-	if (!file_exists(spec->template)) {
-		fprintf(stderr, "missing template: %s\n", spec->template);
-		free_page_spec(spec);
-		return 1;
-	};
-	if (!file_exists(spec->query)) {
-		fprintf(stderr, "missing query: %s\n", spec->query);
-		free_page_spec(spec);
-		return 1;
-	};
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\tfile_exists: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// run query and get text response 
-	char *json_data = get_query_result(conn, spec->query, spec->query_params);
-	if (!json_data) {
-		fprintf(stderr, "query returned no data:%s\n", spec->query);
-		free_page_spec(spec);
-		return 1;
-	}
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\tget_query_result: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// render template and get html text
-	char *html = render_template(spec->template, json_data);
-	if (!html) {
-		fprintf(stderr, "render_template had zero length result.\n");
-		free_page_spec(spec);
-		free(json_data);
-		return 1;
-	}
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\trender_template: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// write html to disk
-	if (write_page(spec->filename, spec->path, html)) {
-		fprintf(stderr, "unable to write html file.\n");
-		free_page_spec(spec);
-		free(json_data);
-		free(html);
-		return 1;
-	}
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\twrite_page: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// write pjax (<main> block of html) to '_' directory
-	if (write_pjax(spec->filename, spec->path, html)) {
-		fprintf(stderr, "unable to write pjax file.\n");
-		free_page_spec(spec);
-		free(json_data);
-		free(html);
-		return 1;
-	}
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\twrite_pjax: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	clock_gettime(CLOCK_MONOTONIC, &ct1); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt1);
-	// clear_dirty_flag: add to a queue for a background thread to process.
-	pthread_mutex_lock(&(flipper->ctl->mutex));
-	unsigned int *id = malloc(sizeof(*id));
-	*id = spec->id;
-	bqueue_push(flipper->wq, id);
-	pthread_mutex_unlock(&(flipper->ctl->mutex));
-
-	// cleanup
-	free_page_spec(spec);
-	free(json_data);
-	free(html);
-	clock_gettime(CLOCK_MONOTONIC, &ct2); clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &pt2);
-	td1 = diff(ct1, ct2); td2 = diff(pt1, pt2);
-	fprintf(stderr, "\tcleanup: system time elapsed: %.3f msec / %ld ns cpu time elapsed: %.3f msec / %ld ns\n ", td1.tv_nsec / 1000000.0, td1.tv_nsec, td2.tv_nsec / 1000000.0, td2.tv_nsec); 
-	return 0;
-}
-
 int write_page(const char *name, const char *path, const char *data)
 {
 	//fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
@@ -407,3 +323,224 @@ int write_pjax(const char *name, const char *path, const char *data)
 	return ret;
 }
 
+static json_object *get_global_context(RendererState *state)
+{
+	PGresult *res;
+	res = PQexecPrepared(state->conn, "get-global-context", 0, NULL, NULL, NULL, 0);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		fprintf(stderr, "get-global-context Error: %s \n", PQerrorMessage(state->conn));
+	}
+	json_object *global_context = json_tokener_parse(PQgetvalue(res, 0, 0));
+	PQclear(res);
+	return global_context;
+}
+
+static int init_postgres(RendererState *state, const char *conninfo)
+{
+	// connect to db	
+	PGresult *res;
+	state->conn = PQconnectdb(conninfo);
+	if (PQstatus(state->conn) != CONNECTION_OK) {
+		fprintf(stderr, "Connection to database failed: %s",
+				PQerrorMessage(state->conn));
+		return -1;
+	}
+	// set search_path	
+	res = PQexec(state->conn, "set search_path = c2v"); 
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "set search_path failed: %s\n", PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	// setup listen command's
+	res = PQexec(state->conn, LISTEN_CMD_1);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "listen command failed: %s\n", PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	res = PQexec(state->conn, LISTEN_CMD_2);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "listen command failed: %s\n", PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	// setup prepared statements
+	res = PQprepare(state->conn, "get-dirty-spec-ids", GET_SPEC_IDS_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
+				PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	res = PQprepare(state->conn, "get-dirty-pages", GET_DIRTY_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
+				PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	res = PQprepare(state->conn, "get-global-context", GET_GLOBAL_CONTEXT_SQL, 1, NULL);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		fprintf(stderr, "failed to prepare statement: %s\n",
+				PQerrorMessage(state->conn));
+		PQclear(res);
+		return -1;
+	}
+	PQclear(res);
+	return 0;
+}
+
+static void multi_page(RendererState *state, PGnotify *notify)
+{
+	fprintf(stderr, "multi_page START: %s\n", get_formatted_time()); 
+	json_object *global_context = get_global_context(state);
+	const char *params[2];
+	char *pk = NULL;
+	PGresult *res;
+	res = PQexecPrepared(state->conn, "get-dirty-spec-ids", 0, NULL, NULL, NULL, 0);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		fprintf(stderr, "get-dirty-spec-ids error: %s \n", PQerrorMessage(state->conn));
+	}
+	int spec_ids_len = PQntuples(res);
+	if (!spec_ids_len) { return ;} // bail if nothing to do
+	char *spec_ids[spec_ids_len];
+	for (int i=0; i < spec_ids_len; i++) {
+		spec_ids[i] = PQgetvalue(res, i, 0);
+	}
+	for (int i = 0; i < spec_ids_len; i++) {
+		fprintf(stderr, "multi_page [start spec] spec_id: %s time: %s\n", spec_ids[i], get_formatted_time()); 
+		int res_cnt = 0;
+		params[0] = spec_ids[i];
+		params[1] = "0";
+		bool has_more = true;
+		while (has_more) {
+			PGresult *res2 = PQexecPrepared(state->conn, "get-dirty-pages", 2, params, NULL, NULL, 0);
+			if (PQresultStatus(res2) != PGRES_TUPLES_OK) {
+				fprintf(stderr, "get-dirty-pages params: %s, error: %s \n", *params, PQerrorMessage(state->conn));
+				break;
+			}
+			//fprintf(stdout, "res_cnt: %d\n", res_cnt);
+			if (pk) {free(pk); pk = NULL;}
+			int res_len = PQntuples(res2);
+			if (!res_len) {
+				has_more = false;
+				PQclear(res2);
+				break;
+			}
+			res_cnt += res_len;
+			has_more = res_len == CHUNK_SIZE;
+			if (has_more) {
+				// TODO: free params[1]
+				pk = strdup(PQgetvalue(res2, res_len-1, 0));
+				params[1] = pk; 
+			}
+			//fprintf(stderr, "has_more: %d, params[1]: %s\n", has_more, params[1]);
+			// TODO: this becomes a queue write when we go multi-threaded.
+			fprintf(stderr, "multi_page [start handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
+			handle_pages(state->conn, state->flipper, res2, atoi(spec_ids[i]), global_context);
+			fprintf(stderr, "multi_page [end handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
+			// TODO: figure out column/row
+			//fprintf(stderr, "step of %d items %s\n", CHUNK_SIZE, get_formatted_time()); 
+		}
+		fprintf(stderr, "multi_page [end spec] spec_id: %s time: %s\n", spec_ids[i], get_formatted_time()); 
+	}
+	json_object_put(global_context);
+	PQclear(res);
+	//fprintf(stderr, "updated page: %s \n", notify->extra);
+	fprintf(stderr, "multi_page END: %s\n", get_formatted_time()); 
+}
+
+static RendererState *renderer_create(void)
+{
+	fprintf(stderr, "renderer_create\n");
+	RendererState *state = malloc(sizeof(*state));
+	//
+	// make background worker for updating diry flags.
+	state->flipper = flag_flipper_new();
+	controller_activate(state->flipper->ctl);	
+	if (pthread_create(&state->tid, NULL, webpage_clear_dirty_thread,
+				(void *)state->flipper)) {
+		fprintf(stderr, "unable to start worker thread. \n");
+		return NULL;
+	}
+	if (init_postgres(state, CONN_INFO)) {
+		return NULL;
+	}
+	state->run = true;
+	return state;
+}
+
+static void renderer_delete(RendererState *state)
+{
+	fprintf(stderr, "clean_up start.\n");
+	controller_deactivate(state->flipper->ctl);
+	pthread_join(state->tid, NULL);
+	fprintf(stderr, "pthread_join finished.\n");
+	PQfinish(state->conn);
+	fprintf(stderr, "clean_up finish.\n");
+	fprintf(stderr, "renderer_delete\n");
+	free(state);
+	state = NULL;
+}
+
+static void renderer_unload(RendererState *state)
+{
+	fprintf(stderr, "renderer_unload\n");
+}
+
+static void renderer_reload(RendererState *state)
+{
+	fprintf(stderr, "renderer_reload\n");
+}
+
+static bool renderer_update(RendererState *state)
+{
+	fprintf(stderr, "renderer_update\n");
+	PGnotify *notify;
+	int sock = PQsocket(state->conn);
+	fd_set input_mask;
+
+	if (sock < 0) {
+		fprintf(stderr, "sock < 0\n Quitting!!!\n");
+		return state->run = false;
+	}
+	FD_ZERO(&input_mask);
+	FD_SET(sock, &input_mask);
+	// TODO: use a timeout
+	// return of: 0 is timeout expired
+	// return of: -1 is error
+	// return of: > 0 is # of bits in readfds
+	if (select(sock + 1, &input_mask, NULL, NULL, NULL) < 0) {
+		fprintf(stderr, "select() failed: %s\n", strerror(errno));
+		return state->run = false;
+	}
+	PQconsumeInput(state->conn);
+	while ((notify = PQnotifies(state->conn))) {
+		fprintf(stderr, "notification: relname: %s \n", notify->relname);
+		fprintf(stderr, "notify START: %s\n", get_formatted_time()); 
+		if(!strcmp(notify->relname, "webpages_dirty")) {
+			multi_page(state, notify);
+		} else {
+			fprintf(stderr, "notify unknown relname: %s\n", notify->relname);	
+		}
+		PQfreemem(notify);
+		fprintf(stderr, "notify END: %s\n", get_formatted_time()); 
+	}
+	// purge the leftovers out of the queue.
+	pthread_cond_signal(&state->flipper->ctl->cond);
+	return state->run;
+}
+
+const RendererApi renderer_api = {
+	.create = renderer_create,
+	.delete = renderer_delete,
+	.unload = renderer_unload,
+	.reload = renderer_reload,
+	.update = renderer_update
+};
