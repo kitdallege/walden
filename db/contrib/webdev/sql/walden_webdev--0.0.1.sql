@@ -2,141 +2,133 @@
 \echo Use "CREATE EXTENSION walden_webdev" to load this file. \quit
 
 /**************************************************************
- *                      Schemas                               *
- **************************************************************/
-CREATE SCHEMA IF NOT EXISTS walden;
-CREATE SCHEMA IF NOT EXISTS walden_history;
-
-
-/**************************************************************
  *                    Tables & Types                          *
  **************************************************************/
-CREATE TYPE asset_type AS ENUM ('CSS', 'JS', 'IMG', 'FILE');
-ALTER TYPE asset_type OWNER to walden;
-
-CREATE TABLE asset
+create type asset_type as enum ('CSS', 'JS', 'IMG', 'FILE');
+create table asset
 (
-    id      SERIAL      NOT NULL PRIMARY KEY,
-    name    TEXT        NOT NULL UNIQUE,
-    type    asset_type  NOT NULL DEFAULT 'FILE'
+    id              serial      not null primary key,
+    date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    name            text        not null ,
+    asset_type      asset_type  not null default 'FILE',
+    parent_path     ltree       not null,
+    checksum        text        not null,
+    unique (name, parent_path)
 );
-ALTER TABLE asset OWNER to walden;
-/* maybe a table per asset type using inheritance ?*/
 
-
-
-CREATE TABLE widget
+create table template
 (
-    id      SERIAL  NOT NULL PRIMARY KEY,
-    name    TEXT    NOT NULL UNIQUE,
-    title   TEXT    NOT NULL
-    -- js_assets
-    -- css_assets
-    -- template
-    -- queries
+    id              serial      not null primary key,
+    date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    name            text        not null,
+    parent_path     ltree       not null,
+    checksum        text        not null,
+    unique (name, parent_path)
 );
-ALTER TABLE widget OWNER to walden;
 
-CREATE TABLE page
+-- Store includes so that @ update we can determine 'ALL' effected resources.
+create table template_include
 (
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT        NOT NULL UNIQUE,
-    title       TEXT        NOT NULL
+    id                  serial      not null primary key,
+    date_created        timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_updated        timestamp   with time zone not null default (now() at time zone 'utc'),
+    source_template_id  integer references template(id),
+    include_template_id integer references template(id),
+    unique (source_template_id, include_template_id)
 );
-ALTER TABLE page OWNER to walden;
--- Create a history table in walden_history
-CREATE TABLE walden_history.page (LIKE page);
--- Add the trigger for versioning.
-CREATE TRIGGER walden_user_versioning_trigger
-BEFORE INSERT OR UPDATE OR DELETE ON page
-FOR EACH ROW EXECUTE PROCEDURE versioning('sys_period', 'walden_history.page', true);
 
-CREATE TABLE widget_on_page
+create table query
 (
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    page_id     INTEGER NOT NULL REFERENCES page(id),
-    widget_id   INTEGER NOT NULL REFERENCES widget(id)
-
+    id              serial      not null primary key,
+    date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    name            text        not null,
+    parent_path     ltree       not null,
+    checksum        text        not null,
+    unique (name, parent_path)
 );
-ALTER TABLE widget_on_page OWNER to walden;
 
-CREATE TABLE wquery
+-- TODO: consider a better name
+create table page_spec 
 (
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
-    statement   TEXT    NOT NULL,
-    params      JSONB   NOT NULL DEFAULT '{}'::JSONB
+    id              serial  not null primary key,
+    template_id     integer not null references template(id),
+    query_id        integer not null references query(id),
+    unique (template_id, query_id)
 );
-ALTER TABLE wquery OWNER to walden;
 
-CREATE TABLE query_entity_ref
+create table resource 
 (
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    entity_id   INTEGER NOT NULL REFERENCES entity(id),
-    query_id    INTEGER NOT NULL REFERENCES wquery(id)
+    id              serial      not null primary key,
+    date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    name            text        not null,
+    mount           ltree       not null,
+    -- Pointer back to the entity that created us. 
+    -- be it: taxon, widget
+    --for_entity_type
+    --for_entity_pk
+    -- for_entity  generic_relationship *optimization*
+    -- used in admin to allow us to tie together the resource
+    -- the the entities that it displays.
+    -- optimization for renderer
+    dirty           boolean     not null default true,
+    unique (mount, name)
 );
-ALTER TABLE query_entity_ref OWNER to walden;
 
-CREATE TABLE widget_query
+create table page(
+    page_spec_id    integer not null references page_spec(id),
+    query_args      text    not null default ''
+) inherits (resource);
+
+create type static_page_format as enum ('RAW', 'MARKDOWN');
+create table static_page
 (
-    id          SERIAL  NOT NULL PRIMARY KEY,
-    widget_id   INTEGER NOT NULL REFERENCES widget(id),
-    query_id    INTEGER NOT NULL REFERENCES wquery(id)
+    format      static_page_format  not null default 'RAW',
+    template_id integer             not null references template(id),
+    content     text                not null
+) inherits (resource);
+
+/* Taxonomy, widgets, are resource factories.
+   as they attach handlers to entity-types to create/update/remove
+   resources in sync with the entities they represent.
+*/
+create table widget(
+    id                  serial      not null primary key,
+    date_created        timestamp with time zone
+                                    not null default (now() at time zone 'utc'),
+    date_updated        timestamp with time zone
+                                    not null default (now() at time zone 'utc'),
+    name                text        not null,
+    mount               ltree       not null,
+    unique (mount, name)
 );
-ALTER TABLE widget_query OWNER to walden;
 
-CREATE TYPE resource_type AS ENUM
+-- Needed so that when a template/query changes it can be linked to the
+-- resources which need to be flagged as dirty.
+create table widget_page_spec
 (
-    'STATIC',
-    'LIST',
-    'DETAIL'
+    id                  serial      not null primary key,
+    widget_id           integer     not null references widget(id),
+    page_spec_id        integer     not null references page_spec(id),
+    unique (widget_id, page_spec_id)
+    --role                taxon_type  not null default 'index';
 );
-ALTER TYPE resource_type OWNER to walden;
 
-CREATE TABLE resource
-(
-    id          SERIAL          NOT NULL PRIMARY KEY,
-    name        TEXT            NOT NULL UNIQUE,
-    type        resource_type   NOT NULL,
-    entity_id   INTEGER         NOT NULL REFERENCES entity(id),
-    children    TEXT            NOT NULL DEFAULT ''
-);
-ALTER TABLE resource OWNER to walden;
-
-
-CREATE TABLE static_page
-(
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT        NOT NULL UNIQUE,
-    title       TEXT        NOT NULL,
-    content     TEXT        NOT NULL
-);
-ALTER TABLE static_page OWNER to walden;
--- Routes
--- Queries
--- View
--- Templates
-CREATE TABLE template
-(
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  tstzrange   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT        NOT NULL UNIQUE
-
-)
--- Assets
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
-CREATE OR REPLACE FUNCTION render(text, text) 
-RETURNS text 
-AS 'pgstach.so', 'render' 
-LANGUAGE C STRICT IMMUTABLE;
+/*
+create or replace function render(text, text) 
+returns text 
+as 'pgstach.so', 'render' 
+language c strict immutable;
 
-COMMENT ON FUNCTION render(tmpl TEXT, context JSON) IS
+comment on function render(tmpl text, context json) is
     'Returns rendered string from  mustache template and json context.';
-
+*/
 --CREATE OR REPLACE FUNCTION render_template(tmpl TEXT, context JSON)
 --RETURNS TEXT AS $$
 --    # TODO: cache modules in GD to avoid import cost.
@@ -148,12 +140,13 @@ COMMENT ON FUNCTION render(tmpl TEXT, context JSON) IS
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-DO $$
-BEGIN
-   PERFORM walden_register_application('Webdev');
-   PERFORM walden_register_entity('Webdev', 'Asset',    'asset');
-   PERFORM walden_register_entity('Webdev', 'Page',     'page');
-   PERFORM walden_register_entity('Webdev', 'Resource', 'resource');
-   PERFORM walden_register_entity('Webdev', 'Widget',   'widget');
-   PERFORM walden_register_entity('Webdev', 'Query',    'wquery');
-END$$;
+do $$
+begin
+   perform walden_register_application('Webdev');
+   --perform walden_register_entity('Webdev', 'Asset',    'asset');
+   perform walden_register_entity('Webdev', 'Page',     'page');
+   perform walden_register_entity('Webdev', 'Resource', 'resource');
+   perform walden_register_entity('Webdev', 'Widget',   'widget');
+   --perform walden_register_entity('Webdev', 'Query',    'wquery');
+end$$;
+

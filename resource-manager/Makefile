@@ -1,7 +1,7 @@
 #-------------------------------------
-# Makefile for irc bot in posix C
-# using epoll with dynamically 
-# loaded .so for plugins
+# Makefile for resource-manager in posix C
+# using epoll with inotify.
+# dynamically (re)loads app.so at runtime.
 #-------------------------------------
 APP		= resource-mgr 
 SRCDIR		= src

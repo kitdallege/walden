@@ -1,67 +1,63 @@
 /* Initial Install of walden_sites */
---\echo Use "CREATE EXTENSION walden_sites" to load this file. \quit
-
-/**************************************************************
- *                      Schemas                               *
- **************************************************************/
-CREATE SCHEMA IF NOT EXISTS walden;
-CREATE SCHEMA IF NOT EXISTS walden_history;
-
+\echo Use "CREATE EXTENSION walden_sites" to load this file. \quit
 
 /**************************************************************
  *                    Tables & Types                          *
  **************************************************************/
-CREATE TABLE organization
+create table organization
 (
-    id          SERIAL      NOT NULL PRIMARY KEY,
-    sys_period  TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    name        TEXT        NOT NULL UNIQUE
+    id          serial      not null primary key,
+    sys_period  tstzrange   not null default tstzrange(current_timestamp, 'infinity'),
+    name        text        not null unique
 );
-ALTER TABLE organization OWNER to walden;
+--ALTER TABLE organization OWNER to walden;
 
-CREATE TABLE site
+create table site
 (
-    id              SERIAL      NOT NULL PRIMARY KEY,
-    sys_period      TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    organization_id INTEGER NOT NULL REFERENCES organization(id),
-    name            TEXT        NOT NULL UNIQUE,
-    domain          TEXT        NOT NULL UNIQUE
+    id              serial      not null primary key,
+    sys_period      tstzrange   not null default tstzrange(current_timestamp, 'infinity'),
+    organization_id integer     not null references organization(id),
+    name            text        not null unique,
+    domain          text        not null unique
 );
-ALTER TABLE site OWNER to walden;
+--ALTER TABLE site OWNER to walden;
 
-CREATE TABLE site_setting
+create table site_setting
 (
-    id              SERIAL      NOT NULL PRIMARY KEY,
-    sys_period      TSTZRANGE   NOT NULL DEFAULT tstzrange(current_timestamp, 'infinity'),
-    site_id         INTEGER     NOT NULL REFERENCES site(id),
-    name            TEXT        NOT NULL,
-    value           TEXT        NOT NULL,
-    UNIQUE (site_id, name)
+    id              serial      not null primary key,
+    sys_period      tstzrange   not null default tstzrange(current_timestamp, 'infinity'),
+    site_id         integer     not null references site(id),
+    name            text        not null,
+    value           text        not null,
+    unique (site_id, name)
 );
-ALTER TABLE site_setting OWNER to walden;
+--ALTER TABLE site_setting OWNER to walden;
 
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
-CREATE FUNCTION walden_create_organization(org_name text)
-RETURNS INTEGER AS $$
-    INSERT INTO organization (name) VALUES (org_name) RETURNING id;
-$$ LANGUAGE SQL VOLATILE;
+create function walden_create_organization(org_name text)
+returns integer as 
+$$
+    insert into organization (name)
+    values (org_name) returning id;
+$$ language sql volatile;
 
-CREATE FUNCTION walden_create_site(org_id integer, site_name text, domain text)
-RETURNS INTEGER AS $$
-    INSERT INTO site (organization_id, name, domain)
-    VALUES (org_id, site_name, domain)
-    RETURNING id;
-$$ LANGUAGE SQL VOLATILE;
-
+create function walden_create_site(org_id integer, site_name text, domain text)
+returns integer as
+$$
+    insert into site (organization_id, name, domain)
+    values (org_id, site_name, domain)
+    returning id;
+$$ language sql volatile;
 
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-DO $$
-BEGIN
-   PERFORM walden_register_application('Sites');
-   PERFORM walden_register_entity('Sites', 'Organization', 'organization');
-   PERFORM walden_register_entity('Sites', 'Site', 'site');
-END$$;
+do $$
+begin
+   perform walden_register_application('Sites');
+   perform walden_register_entity('Sites', 'Organization', 'organization');
+   perform walden_register_entity('Sites', 'Site', 'site');
+end$$;
+

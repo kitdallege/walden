@@ -1,28 +1,28 @@
-CREATE SCHEMA walden;
-CREATE SCHEMA walden_history;
+create schema walden;
+--CREATE SCHEMA walden_history;
 -- CREATE SCHEMA walden_taxonomy;
 
 -- Walden
-GRANT ALL ON SCHEMA walden TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden
-    GRANT ALL ON TABLES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden
-    GRANT USAGE ON SEQUENCES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden
-    GRANT EXECUTE ON FUNCTIONS TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden
-    GRANT USAGE ON TYPES TO walden;
+grant all on schema walden to walden_admin;
+alter default privileges in schema walden
+    grant all on tables to walden_admin;
+alter default privileges in schema walden
+    grant usage on sequences to walden_admin;
+alter default privileges in schema walden
+    grant execute on functions to walden_admin;
+alter default privileges in schema walden
+    grant usage on types to walden_admin;
 
 -- History
-GRANT ALL ON SCHEMA walden_history TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_history
-    GRANT ALL ON TABLES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_history
-    GRANT USAGE ON SEQUENCES TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_history
-    GRANT EXECUTE ON FUNCTIONS TO walden;
-ALTER DEFAULT PRIVILEGES IN SCHEMA walden_history
-    GRANT USAGE ON TYPES TO walden;
+-- grant all on schema walden_history to walden;
+-- alter default privileges in schema walden_history
+--     grant all on tables to walden;
+-- alter default privileges in schema walden_history
+--     grant usage on sequences to walden;
+-- alter default privileges in schema walden_history
+--     grant execute on functions to walden;
+-- alter default privileges in schema walden_history
+--     grant usage on types to walden;
 
 -- Taxonomy
 -- GRANT ALL ON SCHEMA walden_taxonomy TO walden;
