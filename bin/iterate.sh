@@ -33,8 +33,9 @@ cd $WALDEN_CONTRIB_DIR
 echo "user: $(whoami)"
 for d in $(ls .); do
     cd $d
-    echo "building $i"
-    make
+    echo "building: $d"
+    make clean
+    make  
     make install
     cd -
 done
@@ -49,6 +50,6 @@ make install
 
 cd $start_path 
 psql -d walden -U $POSTGRES_USER -e -f ${BASH_SOURCE%/*}/../utils/install-extensions.sql
-#psql -d walden -f ${BASH_SOURCE%/*}/../demo/demo-site.sql
+#psql -d walden -U $db_owner -f /entrypoint-initdb.d/05-install-on-walden.sql
 
 

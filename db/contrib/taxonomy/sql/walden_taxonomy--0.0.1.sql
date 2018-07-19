@@ -1,5 +1,5 @@
 /* Initial Install of walden_taxonoy */
-\echo Use "CREATE EXTENSION walden" to load this file. \quit
+--\echo Use "CREATE EXTENSION walden" to load this file. \quit
 
 /**************************************************************
  *                    Tables & Types                          *
@@ -8,19 +8,22 @@ create table taxonomy
 (
     id      serial  not null primary key,
     site_id integer not null references site(id) unique,
-    name    text    not null unique
+    name    text    not null unique,
+    unique (site_id, name)
 );
 --ALTER TABLE taxonomy OWNER to walden;
 select pg_catalog.pg_extension_config_dump('taxonomy', '');
 comment on table taxonomy is 'Classification tree for site content.';
 
-create type taxon_type as enum ('index', 'detail', 'list-by-occurrence_date');
+--create type taxon_type as enum ('index', 'detail', 'list-by-occurrence_date');
+--node_type           taxon_type  not null default 'list-by-occurrence_date',
 create table taxon
 (
     id                  serial      not null primary key,
-    node_type           taxon_type  not null default 'list-by-occurrence_date',
+    taxonomy_id         integer     not null references taxonomy(id),
+    parent_path         ltree       not null,
     name                text        not null,
-    parent_path         ltree       not null
+    unique (taxonomy_id, parent_path, name)
 );
 select pg_catalog.pg_extension_config_dump('taxon', '');
 -- Needed so that when a template/query changes it can be linked to the
@@ -36,12 +39,12 @@ create table taxon_page_spec
 -- ties a taxon to the entity 'type'(s)  it displays
 -- This allows a trigger to determine what taxon function(s) need to be 
 -- called when an object is updated...
-create table taxon_object_type
+create table taxon_entity_type
 (
     id              serial  not null primary key,
     taxon_id        integer not null references taxon(id),
-    entity_id       integer not null references entity(id),
-    selectable      text    not null
+    entity_id       integer not null references entity(id)
+    --selectable      text    not null
     --key_fields    text[]  not null default '{}'::text[];
 );
 
@@ -116,15 +119,97 @@ sql text := generate_query(
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
+create or replace function
+walden_taxonomy_get_or_create(_site_id integer)
+returns integer as 
+$$
+    with ins as (
+            insert into taxonomy(site_id, name)
+            values (_site_id, (select domain from site where id = _site_id))
+            on conflict (site_id, name)
+            -- never executed, but locks the row
+            -- if no lock needed then 'do nothing' is less overhead. 
+            do update set name = null where false
+            returning id
+        )
+        select id from ins
+            union all
+        select id from taxonomy where site_id = _site_id
+        limit 1;
+$$ language sql volatile;
 
+create or replace function
+walden_taxon_get_or_create(_taxonomy_id integer, _fullpath text)
+returns taxon as 
+$$
+    declare 
+        fp_arr text[] := string_to_array(_fullpath, '/');
+        _name text := fp_arr[array_upper(fp_arr, 1)];
+        _parent_path ltree := concat_ws('.', 'root',
+            nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), '')
+        )::ltree;
+        temp taxon;
+    begin
+        with ins as (
+                insert into taxon(taxonomy_id, parent_path, name)
+                values (_taxonomy_id, _parent_path, _name)
+                on conflict (taxonomy_id, parent_path, name)
+                do nothing
+                returning *
+            )
+            select into temp from (
+                select * from ins
+                union all
+                select * from taxon
+                where   taxonomy_id = _taxonomy_id and 
+                        name = _name and
+                        parent_path = _parent_path
+                limit 1
+            ) as combined;
+        return temp;
+   end;
+$$ language plpgsql;
 
+create or replace function
+walden_taxon_add_page_spec(_taxon_id integer, _page_spec_id integer)
+returns integer as
+$$
+    with ins as (
+            insert into taxon_page_spec(taxon_id, page_spec_id)
+            values (_taxon_id, _page_spec_id)
+            on conflict (taxon_id, page_spec_id)
+            -- never executed, but locks the row
+            -- if no lock needed then 'do nothing' is less overhead. 
+            do update set taxon_id = null where false
+            returning id
+        )
+        select id from ins
+            union all
+        select id from taxon_page_spec
+        where taxon_id = _taxon_id and page_spec_id = _page_spec_id
+        limit 1;
+$$ language sql volatile;
+/*
+create or replace function
+walden_taxon_add_observed_type(_taxon_id integer, _entity_id integer, _keyfunc text)
+returns integer as
+$$
+
+$$ language sql volatile;
+*/
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-do $$
-begin
-   perform walden_register_application('Taxonomy');
-   perform walden_register_entity('Taxonomy', 'Taxonomy',   'taxonomy');
-   perform walden_register_entity('Taxonomy', 'Taxon',      'taxon');
-end$$;
+do
+$$
+    declare
+        app_id      application.id%TYPE;
+    begin
+        app_id := (walden_application_get_or_create('Taxonomy')).id;
+        perform walden_entity_get_or_create(app_id, 'Taxonomy', 'taxonomy');
+        perform walden_entity_get_or_create(app_id, 'Taxon',    'taxon');
+        -- taxon_page_spec
+        -- taxon_entity_type
+    end;
+$$ language plpgsql;
 

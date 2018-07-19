@@ -30,9 +30,13 @@ $$ language plpythonu volatile;
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-do $$
-begin
-   perform walden_register_application('Admin');
-   perform walden_register_entity('Admin', 'EntityForm', 'entity_form');
-end$$;
+do
+$$
+    declare
+        app_id      application.id%TYPE;
+    begin
+        app_id := (walden_application_get_or_create('Admin')).id;
+        perform walden_entity_get_or_create(app_id, 'EntityForm', 'entity_form');
+    end;
+$$ language plpgsql;
 

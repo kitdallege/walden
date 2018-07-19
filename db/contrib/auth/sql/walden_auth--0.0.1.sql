@@ -24,16 +24,33 @@ select pg_catalog.pg_extension_config_dump('walden_user', '');
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
-
+create or replace function
+walden_user_get_or_create(_username text, _first text, _last text, _email text, _pass text, _is_super boolean)
+returns walden_user as 
+$$
+    insert into walden_user (username, first_name, last_name, email, password, is_super)
+    values (_username, _first, _last, _email, _pass, _is_super)
+    on conflict (username)
+    do update set
+        first_name = _first,
+        last_name = _last,
+        email = _email,
+        password = _pass,
+        is_super = _is_super
+    returning *;
+$$ language sql volatile;
 
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-do $$
-begin
-   perform walden_register_application('Auth');
-   perform walden_register_entity('Auth', 'User', 'walden_user');
-   insert into walden_user (username, first_name, last_name, email, password)
-       values ('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', '******');
-end$$;
+do
+$$
+    declare
+        app_id      application.id%TYPE;
+    begin
+        app_id := (walden_application_get_or_create('Auth')).id;
+        perform walden_entity_get_or_create(app_id, 'User', 'walden_user');
+        perform walden_user_get_or_create('kit', 'Kit', 'Dallege', 'kitdallege@gmail.com', 'pass', true);
+    end;
+$$ language plpgsql;
 

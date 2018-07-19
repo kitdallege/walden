@@ -36,28 +36,44 @@ create table site_setting
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
-create function walden_create_organization(org_name text)
-returns integer as 
+create or replace function
+walden_organization_get_or_create(org_name text)
+returns organization as 
 $$
     insert into organization (name)
-    values (org_name) returning id;
+    values (org_name) returning *;
 $$ language sql volatile;
 
-create function walden_create_site(org_id integer, site_name text, domain text)
-returns integer as
+create or replace function
+walden_site_get_or_create(org_id integer, site_name text, domain text)
+returns site as
 $$
     insert into site (organization_id, name, domain)
     values (org_id, site_name, domain)
-    returning id;
+    returning *;
 $$ language sql volatile;
+
+create or replace function
+walden_site_settings_set(_site_id integer, _name text, _value text)
+returns void as 
+$$
+    insert into site_setting (site_id, name, value)
+    values (_site_id, _name, _value)
+    on conflict (site_id, name) do update set value = _value;
+$$ language sql volatile;
+
 
 /**************************************************************
  *                      App Config                            *
  **************************************************************/
-do $$
-begin
-   perform walden_register_application('Sites');
-   perform walden_register_entity('Sites', 'Organization', 'organization');
-   perform walden_register_entity('Sites', 'Site', 'site');
-end$$;
+do
+$$
+    declare
+        app_id      application.id%TYPE;
+    begin
+        app_id := (walden_application_get_or_create('Sites')).id;
+        perform walden_entity_get_or_create(app_id, 'Organization', 'organization');
+        perform walden_entity_get_or_create(app_id, 'Site', 'site');
+    end;
+$$ language plpgsql;
 
