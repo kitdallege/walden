@@ -225,7 +225,7 @@ $$
         -- unique part of the generated functions name
         select into _name_part
             lower(application.name || '_' || entity.name || '__' ||
-                coalesce(nullif(_taxon.name, ''), 'index'))
+                'taxon_' || _taxon.id::text)
         from entity join application on application.id = entity.application_id
         where entity.id = _entity_type_id;
         -- create the handler function that is called on every row
@@ -235,13 +235,13 @@ $$
         -- create trigger function which calls above handler function
         execute format('
             create or replace
-            function %s_taxon__trigger() returns trigger as 
+            function %s__trigger() returns trigger as 
             $fn$
             declare
                 _taxon taxon;
             begin
                 select into _taxon from taxon where id = %L;
-                perform %s_taxon_handler(_taxon, object)
+                perform %s__handler(_taxon, object)
                     from v_new_table as object
                 where %s ;
                 perform pg_notify(''page'', ''dirty'');
@@ -256,23 +256,23 @@ $$
         -- create statement level trigger(s) 
         -- which call the above trigger function 
         execute format('
-            drop trigger if exists %s_taxon__trigger_on_update on %s; 
-            create trigger %s_taxon__trigger_on_update 
+            drop trigger if exists %s__trigger_on_update on %s; 
+            create trigger %s__trigger_on_update 
             after update on %s 
             referencing new table as v_new_table
             for each statement
-            execute procedure %s_taxon__trigger();',
+            execute procedure %s__trigger();',
                 _name_part, _entity_table,
                 _name_part, _entity_table,
                 _name_part);
 
         execute format('
-            drop trigger if exists %s_taxon__trigger_on_insert on %s; 
-            create trigger %s_taxon__trigger_on_insert 
+            drop trigger if exists %s__trigger_on_insert on %s; 
+            create trigger %s__trigger_on_insert 
             after insert on %s 
             referencing new table as v_new_table
             for each statement
-            execute procedure %s_taxon__trigger();',
+            execute procedure %s__trigger();',
                 _name_part, _entity_table,
                 _name_part, _entity_table,
                 _name_part);
@@ -292,7 +292,7 @@ $$
         -- create trigger fn
         execute format('
             create or replace
-            function %s_taxon__handler(t taxon, obj %s)
+            function %s__handler(t taxon, obj %s)
             returns void as
             $fn$
                 insert into page (
@@ -337,7 +337,7 @@ $$
         _key_field  := _args::json#>>'{fields,key-field}';
         execute format('
             create or replace
-            function %s_taxon__handler(t taxon, obj %s)
+            function %s__handler(t taxon, obj %s)
             returns void as
             $fn$
                 insert into page (
@@ -365,6 +365,105 @@ $$
                 where taxon_id = _taxon.id and key = 'main'),
             _key_field
          );
+    end;
+$$ language plpgsql;
+
+
+create or replace function
+walden_taxon_handler_date_based(
+    _taxon taxon,
+    _name_part text,
+    _entity_table text,
+    _args json
+) returns void as 
+$$
+    declare
+        --
+        _date_field     text;
+        _index_key_fn   text;
+        _day_key_fn     text;
+    begin
+        _date_field     := _args::json#>>'{fields,date-field}';
+        _index_key_fn   := _args::json#>>'{key-funcs,index}';
+        _date_field     := _args::json#>>'{key-funcs,day}';
+        -- index
+        execute format('
+            create or replace
+            function %s__index_handler(t taxon, obj %s)
+            returns void as
+            $fn$
+                insert into page (
+                    site_id, name, mount, page_spec_id,
+                    query_args, date_updated, dirty
+                )
+                values (
+                    %L,
+                    t.name,
+                    t.parent_path, 
+                    %L,
+                    %s(obj),
+                    (now() at time zone ''utc''),
+                    true
+                ) on conflict (name, mount)
+                    do update
+                        set date_updated = (now() at time zone ''utc''),
+                        dirty = true;
+            $fn$ language sql;', _name_part, _entity_table,
+            (select site_id from taxonomy where id = _taxon.taxonomy_id),
+            (select page_spec_id from taxon_page_spec
+                where taxon_id = _taxon.id and key = 'main'),
+            _index_key_fn
+        );
+        -- year
+        -- month
+        -- day
+        execute format('
+            create or replace
+            function %s__day_handler(t taxon, obj %s)
+            returns void as
+            $fn$
+                insert into page (
+                    site_id, name, mount, page_spec_id,
+                    query_args, date_updated, dirty
+                )
+                values (
+                    %L,
+                    to_char(obj.%s::date, ''dd''),
+                    subpath(t.parent_path, 0) || t.name || to_char(obj.%s::date, ''yyyy.mm''),
+                    %L,
+                    %s(obj),
+                    (now() at time zone ''utc''),
+                    true
+                ) on conflict (name, mount)
+                    do update
+                        set date_updated = (now() at time zone ''utc''),
+                        dirty = true;
+            $fn$ language sql;', _name_part, _entity_table,
+            (select site_id from taxonomy where id = _taxon.taxonomy_id),
+            _date_field, _date_field,
+            (select page_spec_id from taxon_page_spec
+                where taxon_id = _taxon.id and key = 'day'),
+            _day_key_fn
+        );
+        -- today
+        -- detail
+
+        -- wrapper
+        -- This is kinda lame: but atm the 'trigger' only knows how to
+        -- call into one function. As such, we wrap all the above functions
+        -- in a single function.
+        execute format('
+            create or replace
+            function %s__handler(t taxon, obj %s)
+            returns void as
+            $fn$
+                begin
+                    perform %s__index_handler(t, obj);
+                    perform %s__day_handler(t, obj);
+                end;
+            $fn$ language plpgsql;',
+            _name_part, _entity_table, _name_part, _name_part
+        );
     end;
 $$ language plpgsql;
 /**************************************************************
