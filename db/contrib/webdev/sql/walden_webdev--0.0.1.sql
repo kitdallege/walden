@@ -124,61 +124,83 @@ create table widget_page_spec
 /**************************************************************
  *                      Functions                             *
  **************************************************************/
+-- TODO: this could be code golf'd into being 'language sql immutable';
+create or replace function
+walden_dirname(fullpath text)
+returns ltree as
+$$
+    declare 
+        fp_arr text[] := string_to_array(trim(leading '/' from fullpath), '/');
+        parent_path ltree := concat_ws('.', 'root',
+            nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), '')
+        )::ltree;
+    begin
+        return parent_path;
+    end;
+$$ language plpgsql;
+
+-- TODO: this could be code golf'd into being 'language sql immutable';
+create or replace function
+walden_basename(fullpath text)
+returns text as 
+$$
+    declare 
+        fp_arr text[] := string_to_array(trim(leading '/' from fullpath), '/');
+        name text := fp_arr[array_upper(fp_arr, 1)];
+    begin
+        return coalesce(name, '');
+    end;
+$$ language plpgsql;
+
 create or replace function
 walden_template_get_or_create(_site_id integer, _fullpath text, _checksum text)
 returns template as
 $$
-    declare
-        fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
-        _name text := fp_arr[array_upper(fp_arr, 1)];
-        _parent_path ltree := concat_ws('.', 'root', nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), ''))::ltree;
-        temp template;
-    begin
-        with ins as (
-            insert into template (site_id, name, parent_path, checksum)
-            values (_site_id, _name, _parent_path, _checksum)
-            on conflict (site_id, name, parent_path)
-            do update set checksum = _checksum 
-            returning *
+    with ins as (
+        insert into template (site_id, name, parent_path, checksum)
+        values (
+            _site_id,
+            walden_basename(_fullpath),
+            walden_dirname(_fullpath),
+            _checksum
         )
-        select * into temp from (
-            select * from ins
-                union all
-            select * from template 
-            where site_id = _site_id and name = _name and parent_path = _parent_path
-            limit 1
-        ) as combined;
-        return temp;
-    end;
-$$ language plpgsql;
+        on conflict (site_id, name, parent_path)
+        do update set checksum = _checksum 
+        returning *
+    )
+    select * from ins
+        union all
+    select * from template 
+    where   site_id = _site_id and
+            name = walden_basename(_fullpath) and
+            parent_path = walden_dirname(_fullpath)
+    limit 1;
+$$ language sql;
 
 create or replace function
 walden_query_get_or_create(_site_id integer, _fullpath text, _checksum text)
 returns template as
 $$
-    declare
-        fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
-        _name text := fp_arr[array_upper(fp_arr, 1)];
-        _parent_path ltree := concat_ws('.', 'root', nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), ''))::ltree;
-        temp query;
-    begin
-        with ins as (
-            insert into query (site_id, name, parent_path, checksum)
-            values (_site_id, _name, _parent_path, _checksum)
-            on conflict (site_id, name, parent_path)
-            do update set checksum = _checksum 
-            returning *
+    with ins as (
+        insert into query (site_id, name, parent_path, checksum)
+        values (
+            _site_id,
+            walden_basename(_fullpath),
+            walden_dirname(_fullpath),
+            _checksum
         )
-        select * into temp from (
-            select * from ins
-                union all
-            select * from query 
-            where site_id = _site_id and name = _name and parent_path = _parent_path
-            limit 1
-        ) as combined;
-        return temp;
-    end;
-$$ language plpgsql;
+        on conflict (site_id, name, parent_path)
+        do update set checksum = _checksum 
+        returning *
+    )
+    select * from ins
+        union all
+    select * from query 
+    where   site_id = _site_id and 
+            name = walden_basename(_fullpath) and
+            parent_path = walden_dirname(_fullpath) 
+    limit 1;
+$$ language sql;
 
 create or replace function
 walden_page_spec_get_or_create(_template_id integer, _query_id integer)
@@ -204,53 +226,36 @@ $$
         return temp;
     end;
 $$ language plpgsql;
+
+
 /*
 given: (_fullpath text)
 fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
 _name text := fp_arr[array_upper(fp_arr, 1)];
 _parent_path ltree := concat_ws('.', 'root', nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), ''))::ltree;
 */
+
 create or replace function
 walden_template_get_by_fullpath(_site_id integer, _fullpath text)
 returns template as
 $$
-    declare
-        fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
-        _name text := fp_arr[array_upper(fp_arr, 1)];
-        _parent_path ltree := concat_ws('.', 'root',
-            nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), '')
-        )::ltree;
-        temp template;
-    begin
-            select * into temp from template
-            where site_id = _site_id and
-                  name = _name and
-                  parent_path = _parent_path
-            limit 1;
-            return temp;
-    end;
-$$ language plpgsql;
+    select * from template
+    where site_id = _site_id and
+          name = walden_basename(_fullpath) and
+          parent_path = walden_dirname(_fullpath)
+    limit 1;
+$$ language sql;
 
 create or replace function
 walden_query_get_by_fullpath(_site_id integer, _fullpath text)
 returns query as
 $$
-    declare
-        fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
-        _name text := fp_arr[array_upper(fp_arr, 1)];
-        _parent_path ltree := concat_ws('.', 'root',
-            nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), '')
-        )::ltree;
-        temp query;
-    begin
-            select * into temp from query 
-            where site_id = _site_id and
-                  name = _name and
-                  parent_path = _parent_path
-            limit 1;
-            return temp;
-    end;
-$$ language plpgsql;
+    select * from query 
+    where site_id = _site_id and
+          name = walden_basename(_fullpath) and
+          parent_path = walden_dirname(_fullpath)
+    limit 1;
+$$ language sql;
 
 /*
 create or replace function render(text, text) 

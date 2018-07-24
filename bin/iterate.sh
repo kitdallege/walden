@@ -49,7 +49,7 @@ make install
 
 
 cd $start_path 
-psql -d walden -U $POSTGRES_USER -e -f ${BASH_SOURCE%/*}/../utils/install-extensions.sql
-#psql -d walden -U $db_owner -f /entrypoint-initdb.d/05-install-on-walden.sql
+psql -d walden -U $POSTGRES_USER -f ${BASH_SOURCE%/*}/../utils/install-extensions.sql
+psql -d walden -U $POSTGRES_USER -f /entrypoint-initdb.d/05-install-on-walden.sql
 
 

@@ -94,6 +94,34 @@ $$
     returning *;
 $$ language sql volatile;
 
+/*
+
+[entity]_trigger_on_change
+[entity]_[taxon]_keyfunc(entity) -> text
+[taxon]_handle_[entity](taxon, entity, keyfunc)
+
+*/
+create or replace function
+walden_entity_add_observer(
+    _self_id integer, _other_type_id integer, _other_inst_id integer,
+    insert_func text, update_func text, delete_func text
+) returns void as
+$$
+    declare
+        -- vars
+    begin
+        -- create trigger funcs
+        if insert_func is not null then
+
+        end if;
+        if update_func is not null then
+
+        end if;
+        if delete_func is not null then
+
+        end if;
+    end;
+$$ language plpgsql volatile;
 /**************************************************************
  *                 General Functions                          *
  **************************************************************/
