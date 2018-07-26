@@ -84,7 +84,8 @@ create table resource
 
 create table page(
     page_spec_id    integer not null references page_spec(id),
-    query_args      text    not null default ''
+    query_args      text    not null default '',
+    unique (mount, name)
 ) inherits (resource);
 
 create type static_page_format as enum ('RAW', 'MARKDOWN');
@@ -117,8 +118,8 @@ create table widget_page_spec
     id                  serial      not null primary key,
     widget_id           integer     not null references widget(id),
     page_spec_id        integer     not null references page_spec(id),
+    key                 text        not null,
     unique (widget_id, page_spec_id)
-    --role                taxon_type  not null default 'index';
 );
 
 /**************************************************************
@@ -200,40 +201,72 @@ $$
             name = walden_basename(_fullpath) and
             parent_path = walden_dirname(_fullpath) 
     limit 1;
-$$ language sql;
+$$ language sql volatile;
 
 create or replace function
 walden_page_spec_get_or_create(_template_id integer, _query_id integer)
 returns page_spec as 
 $$
-    declare
-        temp page_spec;
-    begin
-        with ins as (
-            insert into page_spec(template_id, query_id)
-            values (_template_id, _query_id)
-            on conflict (template_id, query_id)
-            do nothing 
-            returning *
+    with ins as (
+        insert into page_spec(template_id, query_id)
+        values (_template_id, _query_id)
+        on conflict (template_id, query_id)
+        do nothing 
+        returning *
+    )
+    select * from ins
+        union all
+    select * from page_spec 
+    where   template_id = _template_id and
+            query_id = _query_id 
+    limit 1;
+$$ language sql volatile;
+
+create or replace function
+walden_widget_get_or_create(_site_id integer, _fullpath text)
+returns widget as
+$$
+    with ins as (
+        insert into widget (site_id, name, mount)
+        values (
+            _site_id,
+            walden_basename(_fullpath),
+            walden_dirname(_fullpath)
         )
-        select * into temp from (
-            select * from ins
-                union all
-            select * from page_spec 
-            where template_id = _template_id and query_id = _query_id 
-            limit 1
-        ) as combined;
-        return temp;
-    end;
-$$ language plpgsql;
+        on conflict (site_id, name, mount)
+        do nothing 
+        returning *
+    )
+    select * from ins
+        union all
+    select * from widget 
+    where   site_id = _site_id and
+            name = walden_basename(_fullpath) and
+            mount = walden_dirname(_fullpath)
+    limit 1; 
+$$ language sql volatile;
 
-
-/*
-given: (_fullpath text)
-fp_arr text[] := string_to_array(trim(leading '/' from _fullpath), '/');
-_name text := fp_arr[array_upper(fp_arr, 1)];
-_parent_path ltree := concat_ws('.', 'root', nullif(array_to_string(fp_arr[0:array_upper(fp_arr, 1)-1], '.'), ''))::ltree;
-*/
+create or replace function
+walden_widget_add_page_spec(_widget_id integer, _page_spec_id integer, _key text)
+returns integer as
+$$
+    with ins as (
+            insert into widget_page_spec(widget_id, page_spec_id, key)
+            values (_widget_id, _page_spec_id, _key)
+            on conflict (widget_id, page_spec_id, key)
+            -- never executed, but locks the row
+            -- if no lock needed then 'do nothing' is less overhead. 
+            do update set widget_id = null where false
+            returning id
+        )
+        select id from ins
+            union all
+        select id from widget_page_spec 
+        where   widget_id = _widget_id and
+                page_spec_id = _page_spec_id and
+                key = _key
+        limit 1;
+$$ language sql volatile;
 
 create or replace function
 walden_template_get_by_fullpath(_site_id integer, _fullpath text)

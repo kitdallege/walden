@@ -89,7 +89,12 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		//write files
 		const char *filename = PQgetvalue(results, i, 1);
 		char *path = PQgetvalue(results, i, 2);
-		path += 5; // walk path forward past the first dir.
+		if (strchr(path, '/')) {
+			path += 5; // walk path forward past the first dir.
+		} else {
+			path += 4;
+		}
+		fprintf(stderr, "filename: %s , path: %s\n", filename, path);
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}
@@ -151,7 +156,11 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		char **query_file, json_object *global_context)
 {
 	fprintf(stderr, "START handle_pages_vector \n");
-	if (!results_len) { return 0; }
+	if (!results_len) {
+		fprintf(stderr, "no results to process\n");
+		return 0;
+	}
+	fprintf(stderr, "results.len: %d\n", results_len);
 	// 1 query for all pages.
 	PGresult *res;
 	char *query_param;
@@ -174,13 +183,15 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	//fprintf(stderr, "query_file post agument: %s\n", *query_file);
 	res = PQexec(conn, *query_file);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-		fprintf(stderr, "error with query: %s error:%s\n", *query_file,
-				PQerrorMessage(conn));
+		fprintf(stderr, "error with query: %s error:%s\n",
+				*query_file, PQerrorMessage(conn));
 		fprintf(stderr, "END handle_pages_vector \n");
 		return 0;
 	}
-	//fprintf(stderr, "vectorized query returned %d rows. \n", PQntuples(res));
 	if (!PQntuples(res)) {
+		fprintf(stderr, "vectorized query returned 0 rows. \n");
+		fprintf(stderr, "error with query: %s error:%s\n",
+				*query_file, PQerrorMessage(conn));
 		fprintf(stderr, "END handle_pages_vector \n");
 		return 0;
 	}
@@ -203,7 +214,14 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		int row_idx = *(int *)item->data; 
 		const char *filename = PQgetvalue(results, row_idx, 1);
 		char *path = PQgetvalue(results, row_idx, 2);
-		path += 5; // walk path forward past the first dir.
+		if (strchr(path, '/')) {
+			path += 5; // walk path forward past the first dir.
+		} else {
+			path += 4;
+		}
+		if (!strstr(path, "item")) {
+			fprintf(stderr, "filename: %s , path: %s\n", filename, path);
+		}
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}

@@ -25,7 +25,7 @@ create table site
 create table site_setting
 (
     id              serial      not null primary key,
-    sys_period      tstzrange   not null default tstzrange(current_timestamp, 'infinity'),
+--    sys_period      tstzrange   not null default tstzrange(current_timestamp, 'infinity'),
     site_id         integer     not null references site(id),
     name            text        not null,
     value           text        not null,

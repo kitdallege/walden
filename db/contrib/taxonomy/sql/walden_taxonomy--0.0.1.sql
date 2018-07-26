@@ -191,6 +191,17 @@ $$
         limit 1;
 $$ language sql volatile;
 
+/*
+You could also pass in all aspects of the trigger query 
+rather than just the where clause. this would allow you to build a
+where clause that used relations. 
+
+eg: (if we tie objects to taxons directly (for detail view) ala: gmg).
+
+could also send more than the (taxon, row) down to the handler function
+if you had a means to specify it, allowing for richer filters in
+the views to be precomputed.
+*/
 create or replace function
 walden_taxon_add_allowed_type(
     _taxon          taxon, -- should pass whole taxon in
@@ -240,7 +251,7 @@ $$
             declare
                 _taxon taxon;
             begin
-                select into _taxon from taxon where id = %L;
+                select into _taxon  * from taxon where id = %L;
                 perform %s__handler(_taxon, object)
                     from v_new_table as object
                 where %s ;
@@ -248,8 +259,7 @@ $$
                 return new;
             end; 
            $fn$ language plpgsql;',
-                _name_part, _taxon.id, 
-               format('%s_taxon_-handler', _name_part),
+                _name_part, _taxon.id, _name_part,
                coalesce(_where_clause, 'true')
         );
 
@@ -301,7 +311,7 @@ $$
                 )
                 values (
                     %L,
-                    t.name,
+                    coalesce(t.name, ''index''),
                     t.parent_path,
                     %L,
                     default,
@@ -368,7 +378,19 @@ $$
     end;
 $$ language plpgsql;
 
+/*
+TODO: inline the various functions into one 'large function'
+      as its liable to produce drastically faster call times.
 
+eg: theory is the function call overhead is most of the time spent
+    as the actual meat of the function doesn't do a lot.
+
+probably could be made into a single insert with multiple values
+and the 'values tuples' could be computed via the formats and stored
+in text::vars.
+
+Thus the code stays somewhat readable, and yet were optimal at execution time.
+*/
 create or replace function
 walden_taxon_handler_date_based(
     _taxon taxon,
@@ -385,7 +407,7 @@ $$
     begin
         _date_field     := _args::json#>>'{fields,date-field}';
         _index_key_fn   := _args::json#>>'{key-funcs,index}';
-        _date_field     := _args::json#>>'{key-funcs,day}';
+        _day_key_fn     := _args::json#>>'{key-funcs,day}';
         -- index
         execute format('
             create or replace
@@ -411,7 +433,7 @@ $$
             $fn$ language sql;', _name_part, _entity_table,
             (select site_id from taxonomy where id = _taxon.taxonomy_id),
             (select page_spec_id from taxon_page_spec
-                where taxon_id = _taxon.id and key = 'main'),
+                where taxon_id = _taxon.id and key = 'landing'),
             _index_key_fn
         );
         -- year
@@ -448,10 +470,13 @@ $$
         -- today
         -- detail
 
-        -- wrapper
-        -- This is kinda lame: but atm the 'trigger' only knows how to
-        -- call into one function. As such, we wrap all the above functions
-        -- in a single function.
+        -- wrapper: TODO
+        -- The 'trigger' only knows how to call into one function.
+        --  As such, we wrap all the above functions in a single function.
+        -- a: one function call is all you want to eat in O(n) 
+        -- b: its fairly easy to inline a bunch of functions. 
+        -- c: in this instance we can combine the inserts to a single insert
+        --    as well, thus further optimizing the trigger.
         execute format('
             create or replace
             function %s__handler(t taxon, obj %s)
