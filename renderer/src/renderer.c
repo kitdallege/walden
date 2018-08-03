@@ -21,13 +21,13 @@
 #define LISTEN_CMD_2 "listen webpages_dirty"
 
 #define GET_SPEC_IDS_SQL "select distinct page_spec_id "\
-		"from webpage where dirty = true;"
+		"from page where dirty = true;"
 
 #define CHUNK_SIZE 2000
 #define GET_DIRTY_SQL  "select p.id, p.name || '.html' as filename, "\
 		"replace(p.parent_path::text, '.', '/') as path, "\
 		"spec.template, spec.query, p.query_params "\
-	"from webpage as p join page_spec as spec on spec.id = p.page_spec_id "\
+	"from page as p join page_spec as spec on spec.id = p.page_spec_id "\
 	"where p.dirty = true and p.page_spec_id = $1 and p.id > $2 "\
 	"order by p.page_spec_id, p.taxon_id, p.id "\
 	"limit 2000; "\
@@ -497,6 +497,7 @@ static RendererState *renderer_create(void)
 static void renderer_delete(RendererState *state)
 {
 	fprintf(stderr, "clean_up start.\n");
+	pthread_cond_signal(&(state->flipper->ctl->cond));
 	controller_deactivate(state->flipper->ctl);
 	pthread_join(state->tid, NULL);
 	fprintf(stderr, "pthread_join finished.\n");
