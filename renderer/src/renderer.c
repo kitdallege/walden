@@ -9,30 +9,20 @@
 
 #include <json-c/json.h> 
 
+#include "renderer.h"
 #include "log.h"
 #include "templates.h"
 #include "files.h"
 #include "flag_flipper.h"
 #include "query.h"
-#include "renderer.h"
+#include "queries.h"
 
-#define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
+
+
+#define CONN_INFO "port=5432 dbname=walden user=postgres"
 #define LISTEN_CMD_1 "listen webpage_dirty"
 #define LISTEN_CMD_2 "listen webpages_dirty"
-
-#define GET_SPEC_IDS_SQL "select distinct page_spec_id "\
-		"from page where dirty = true;"
-
 #define CHUNK_SIZE 2000
-#define GET_DIRTY_SQL  "select p.id, p.name || '.html' as filename, "\
-		"replace(p.parent_path::text, '.', '/') as path, "\
-		"spec.template, spec.query, p.query_params "\
-	"from page as p join page_spec as spec on spec.id = p.page_spec_id "\
-	"where p.dirty = true and p.page_spec_id = $1 and p.id > $2 "\
-	"order by p.page_spec_id, p.taxon_id, p.id "\
-	"limit 2000; "\
-
-#define GET_GLOBAL_CONTEXT_SQL "select data from config where name = 'context_globals';"
 static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
@@ -210,6 +200,7 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		item = hash_table_search(ptable, PQgetvalue(res, i, 0));
 		if (!item) {
 			fprintf(stderr, "unable to find item for: %s\n", PQgetvalue(res, i, 0));
+			continue;
 		}
 		int row_idx = *(int *)item->data; 
 		const char *filename = PQgetvalue(results, row_idx, 1);
@@ -363,8 +354,9 @@ static int init_postgres(RendererState *state, const char *conninfo)
 				PQerrorMessage(state->conn));
 		return -1;
 	}
+	fprintf(stderr, "Connection to db succeeded: %s", conninfo);
 	// set search_path	
-	res = PQexec(state->conn, "set search_path = c2v"); 
+	res = PQexec(state->conn, "set search_path = walden"); 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "set search_path failed: %s\n", PQerrorMessage(state->conn));
 		PQclear(res);
@@ -387,7 +379,7 @@ static int init_postgres(RendererState *state, const char *conninfo)
 	}
 	PQclear(res);
 	// setup prepared statements
-	res = PQprepare(state->conn, "get-dirty-spec-ids", GET_SPEC_IDS_SQL, 1, NULL);
+	res = PQprepare(state->conn, "get-dirty-spec-ids", (const char *)get_spec_ids_sql, 1, NULL);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "failed to prepare statement: %s\n",
 				PQerrorMessage(state->conn));
@@ -395,7 +387,7 @@ static int init_postgres(RendererState *state, const char *conninfo)
 		return -1;
 	}
 	PQclear(res);
-	res = PQprepare(state->conn, "get-dirty-pages", GET_DIRTY_SQL, 1, NULL);
+	res = PQprepare(state->conn, "get-dirty-pages", (const char *)get_dirty_sql, 1, NULL);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "failed to prepare statement: %s\n",
 				PQerrorMessage(state->conn));
@@ -403,7 +395,7 @@ static int init_postgres(RendererState *state, const char *conninfo)
 		return -1;
 	}
 	PQclear(res);
-	res = PQprepare(state->conn, "get-global-context", GET_GLOBAL_CONTEXT_SQL, 1, NULL);
+	res = PQprepare(state->conn, "get-global-context", (const char*)get_global_context_sql, 1, NULL);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "failed to prepare statement: %s\n",
 				PQerrorMessage(state->conn));

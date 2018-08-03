@@ -4,6 +4,7 @@
 #include <pthread.h>
 
 #include "flag_flipper.h"
+#include "queries.h"
 
 FlagFlipperState *flag_flipper_new(void)
 {
@@ -58,23 +59,21 @@ void *webpage_clear_dirty_thread(void *arg)
 	FlagFlipperState *st = (FlagFlipperState*)arg;
 	// create a PGconn locally.
 	PGresult *res;
-	PGconn *conn = PQconnectdb("port=5432 dbname=c2v user=c2v_admin");
+	PGconn *conn = PQconnectdb("port=5432 dbname=walden user=postgres");
 	if (PQstatus(conn) != CONNECTION_OK) {
 		fprintf(stderr, "Connection to database failed: %s",
 				PQerrorMessage(conn));
 	}
-	fprintf(stderr, "Connection to database succeeded\n");
-	res = PQexec(conn, "set search_path = c2v"); 
+	fprintf(stderr, "Connection to database walden succeeded\n");
+	res = PQexec(conn, "set search_path = walden"); 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "SET failed: %s\n", PQerrorMessage(conn));
 		PQclear(res);
 	}
-	fprintf(stderr, "Set search_path = public \n");
+	fprintf(stderr, "Set search_path = walden\n");
 	PQclear(res);
 	// setup prepared statement
-	res = PQprepare(conn, "flip-flag",
-		"update webpage set date_updated = default, dirty = false where id = ANY($1);",
-		1, NULL);
+	res = PQprepare(conn, "flip-flag", (const char *)flip_flag_sql, 1, NULL);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "failed to prepare statement!\n");
 		PQclear(res);
@@ -125,8 +124,8 @@ void *webpage_clear_dirty_thread(void *arg)
 int webpage_clear_dirty_flag(PGconn *conn, int id)
 {
 	char cmd[128]; // stmt w/sys.maxsize: 87
-       	sprintf(cmd, "update webpage set date_updated = default, dirty = false "
-			"where id = %d", id);
+		//update_dirty_flag_sql
+       	sprintf(cmd, (const char *)update_dirty_flag_sql, id);
 	PGresult *res;
 	res = PQexec(conn, cmd);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {

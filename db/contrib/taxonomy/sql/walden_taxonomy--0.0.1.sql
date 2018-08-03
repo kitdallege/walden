@@ -357,7 +357,7 @@ $$
                 values (
                     %L,
                     obj.%s,
-                    subpath(t.parent_path, 0) || to_char(obj.%s::date, ''yyyy.mm.dd''),
+                    t.parent_path || t.name || to_char(obj.%s::date, ''yyyy.mm.dd''),
                     %L,
                     obj.%s, 
                     (now() at time zone ''utc''),
@@ -451,7 +451,7 @@ $$
                 values (
                     %L,
                     to_char(obj.%s::date, ''dd''),
-                    subpath(t.parent_path, 0) || t.name || to_char(obj.%s::date, ''yyyy.mm''),
+                    t.parent_path || t.name || to_char(obj.%s::date, ''yyyy.mm''),
                     %L,
                     %s(obj),
                     (now() at time zone ''utc''),

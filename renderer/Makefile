@@ -1,3 +1,5 @@
+SHELL = bash
+
 APP 	= renderer
 
 SRCDIR 	= src
@@ -28,26 +30,31 @@ S_OBJS=	$(SRCS:src/%.c=$(OBJDIR)/%.o)
 
 all: $(APP)
 
-$(APP): $(OBJDIR) $(S_OBJS) $(OBJDIR)/queries.h
-	$(CC) $(S_OBJS) $(LDFLAGS) -o $@
+$(APP): $(OBJDIR) queries.o $(S_OBJS)
+	$(CC) $(S_OBJS) $(OBJDIR)/queries.o $(LDFLAGS) -o $@
 
 $(OBJDIR)/%.o: src/%.c 
 	$(CC) $(CFLAGS) -c $< -o $@ 
 
-$(OBJDIR)/queries.h: $(OBJDIR)
+queries.o: $(OBJDIR)
 	@echo "Generating $@"
 	@mkdir -p $(OBJDIR)/sql && \
 	cd queries && \
-	find . -type f -name '*.sql' | cut -d/ -f2 |  \
-	xargs -I % bash -c "cat %  > ../$(OBJDIR)/sql/%"  && \
+	find *  -type f -name '*.sql' | \
+	xargs -I % bash -c "cat %  > ../$(OBJDIR)/sql/%" && \
 	cd ../$(OBJDIR)/sql && \
-	truncate -s 0 ../queries.h && \
-	find . -type f | cut -d/ -f2  | \
-       	xargs -I % bash -c "xxd -i % >> ../queries.h"
-	@cd $(OBJDIR) && sed -i 's/, 0x\([0-9a-f]\{2\}\)$$/\, 0x00/' queries.h
+	truncate -s 0 ../queries.c && truncate -s 0 ../queries.h && \
+	echo -e '#include "queries.h"\n\n' >> ../queries.c && \
+	find * -type f | \
+       	xargs -I % bash -c "xxd -i % >> ../queries.c" && \
+	cd ../ && sed -i 's/, 0x\([0-9a-f]\{2\}\)$$/\, 0x00/' queries.c && \
+	echo -e "#ifndef QUERIES_H\n#define QUERIES_H\n\n" >> queries.h && \
+	cat queries.c | sed 's/unsigned/extern unsigned/g' | \
+		grep extern | cut -d'=' -f1 | sed 's/$$/;/g' >> queries.h && \
+	echo -e "\n#endif\n" >> queries.h
 	@rm -f sql
+	$(CC) $(CFLAGS) -c $(OBJDIR)/queries.c -o $(OBJDIR)/queries.o 
 	@echo "Generated $@"
-#@cd $(OBJDIR) && sed -i 's/, 0x\([0-9a-f]\{2\}\)$$/\, 0x00/' queries.h
 
 $(OBJDIR):
 	@mkdir -p $(OBJDIR)
