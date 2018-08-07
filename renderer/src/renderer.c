@@ -17,8 +17,13 @@
 #include "query.h"
 #include "queries.h"
 
-
-
+//---------------------------------------------------------
+// TODO: move config values to db
+// note: their duplicated throughout the codebase
+// * they need to be coming out of the db.
+// * program should accept a single parameter arg to a 
+//   'config file' which contains a single db connection string value.
+//    from there its all json/db based.
 #define CONN_INFO "port=5432 dbname=walden user=postgres"
 #define LISTEN_CMD_1 "listen webpage_dirty"
 #define LISTEN_CMD_2 "listen webpages_dirty"
@@ -27,7 +32,7 @@ static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
 static char query_dir[] = "queries";
-
+//---------------------------------------------------------
 
 static bool is_scalar(int page_spec_id)
 {
@@ -84,7 +89,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		} else {
 			path += 4;
 		}
-		fprintf(stderr, "filename: %s , path: %s\n", filename, path);
+		//fprintf(stderr, "filename: %s , path: %s\n", filename, path);
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}
@@ -209,9 +214,6 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 			path += 5; // walk path forward past the first dir.
 		} else {
 			path += 4;
-		}
-		if (!strstr(path, "item")) {
-			fprintf(stderr, "filename: %s , path: %s\n", filename, path);
 		}
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);

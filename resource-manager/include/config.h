@@ -5,6 +5,7 @@
 
 typedef struct Config
 {
+	int site_id;
 	char db_conn_info[CONF_VALUE_LEN];
 	char template_root[CONF_VALUE_LEN];
 	char query_root[CONF_VALUE_LEN];

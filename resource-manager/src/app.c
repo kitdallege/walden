@@ -9,7 +9,7 @@
 #include "watcher.h"
 
 #define CONF_FILE "./resource-mgr.conf"
-#define CONN_INFO "port=5432 dbname=c2v user=c2v_admin"
+#define CONN_INFO "port=5432 dbname=walden user=postgres"
 /*
 static char* get_formatted_time(void)
 {

@@ -25,8 +25,8 @@ CFLAGS  += -fms-extensions
 CFLAGS  += -fno-omit-frame-pointer #-fsanitize=address -ggdb 
 CFLAGS  += -I`pg_config --includedir` 
 
-LDFLAGS = -ldl -lpq 
-#LDFLAGS += $(shell pkg-config libpq --libs)
+LDFLAGS  = -ldl -lpq 
+LDFLAGS  += $(shell pkg-config libpq json-c libpq --libs)
 SRCS 	= $(wildcard $(SRCDIR)/*.c)
 S_OBJS 	= $(SRCS:src/%.c=$(OBJDIR)/%.o)
 

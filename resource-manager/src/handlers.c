@@ -72,13 +72,13 @@ void handler_conf(Handler *self, void *user)
 	}
 	fprintf(stderr, "db conn successful. \n");
 	// TODO: setup prepared statements.
-	PGresult *res = PQexec(self->conn, "set search_path = c2v"); 
+	PGresult *res = PQexec(self->conn, "set search_path = walden"); 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		fprintf(stderr, "SET failed: %s\n", PQerrorMessage(self->conn));
 		PQclear(res);
 	}
 	PQclear(res);
-	fprintf(stderr, "Set search_path = c2v successful.\n");
+	fprintf(stderr, "Set search_path = walden successful.\n");
 
 }
 
@@ -119,8 +119,10 @@ void handler_enqueue_event(Handler *self, FileEvent *event)
 }
 
 // TODO: atm this is O(N) just run a query for every found file. 
-#define TEMPLATE_CREATE_OR_UPDATE_SQL "select template_create_or_update($1::text, $2::text);"
-#define QUERY_CREATE_OR_UPDATE_SQL "select query_create_or_update($1::text, $2::text);"
+// TODO: api changed... get_or_create(site_id integer, fullpath text, checksum text) 
+// select get_or_create($1::integer, $2::text, $3::text);
+#define TEMPLATE_CREATE_OR_UPDATE_SQL "select walden_template_get_or_create($1::integer, $2::text, $3::text);"
+#define QUERY_CREATE_OR_UPDATE_SQL "select walden_query_get_or_create($1::integer, $2::text, $3::text);"
 void handler_sync_all(Handler *self)
 {
 	PGresult *res;
@@ -129,15 +131,16 @@ void handler_sync_all(Handler *self)
 		// cut template_root off the path
 		char *path = templates->paths[i];
 		char *checksum = compute_sha1(path);
-		const char *params[2];
+		char *params[3];
 		// adding 1 to template_root to take the starting '/' as well
-		params[0] = path + strlen(self->conf->template_root) + 1;
-		params[1] = checksum; 
-		fprintf(stderr, "path: %s rel: %s checksum: %s\n", path, params[0], params[1]);
+		sprintf(params[0], "%d", self->conf->site_id);
+		params[1] = path + strlen(self->conf->template_root) + 1;
+		params[2] = checksum; 
+		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
 		res = PQexecParams(
 			self->conn,
 			TEMPLATE_CREATE_OR_UPDATE_SQL,
-			2, NULL, params, NULL, NULL, 0
+			3, NULL, (const char* const*)params, NULL, NULL, 0
 		);
 		if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 			fprintf(
@@ -155,14 +158,15 @@ void handler_sync_all(Handler *self)
 		// cut template_root off the path
 		char *path = queries->paths[i];
 		char *checksum = compute_sha1(path);	
-		const char *params[2];
-		params[0] = path + strlen(self->conf->template_root) + 1;
-		params[1] = checksum; 
-		fprintf(stderr, "path: %s rel: %s checksum: %s\n", path, params[0], params[1]);
+		char *params[2];
+		sprintf(params[0], "%d", self->conf->site_id);
+		params[1] = path + strlen(self->conf->query_root) + 1;
+		params[2] = checksum; 
+		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
 		res = PQexecParams(
 			self->conn,
 			QUERY_CREATE_OR_UPDATE_SQL,
-			2, NULL, params, NULL, NULL, 0
+			3, NULL, (const char * const*)params, NULL, NULL, 0
 		);
 		if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 			fprintf(
