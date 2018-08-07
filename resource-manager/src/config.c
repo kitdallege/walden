@@ -49,7 +49,7 @@ void configurator_zero(Configurator *self)
 	memset(self->conf->db_conn_info, 0, CONF_VALUE_LEN);
 	memset(self->conf->template_root, 0, CONF_VALUE_LEN);
 	memset(self->conf->query_root, 0, CONF_VALUE_LEN);
-	self->conf->site_id = 0;
+	memset(self->conf->site_id, 0, 64);
 }
 
 void configurator_free(Configurator *self)
@@ -101,12 +101,13 @@ int configurator_load_config(Configurator *self)
 		fprintf(stderr, "unable to find site_id in config json.\n");
 		return 1;
 	}
-	self->conf->site_id = json_object_get_int(attr);
+	strcpy(self->conf->site_id, json_object_get_string(attr));
 	fprintf(stderr,
-			"AppConfig {db_conn_info=%s, template_root=%s, query_root=%s, site_id=%d} @ %p \n",
+			"AppConfig {db_conn_info=%s, template_root=%s, query_root=%s, site_id=%s} @ %p \n",
 			self->conf->db_conn_info, self->conf->template_root,
 			self->conf->query_root, self->conf->site_id, (void *)self->conf);
 	PQfinish(conn);
+	PQclear(res);
 	json_object_put(obj);
 	return 0;
 

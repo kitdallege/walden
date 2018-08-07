@@ -133,7 +133,7 @@ void handler_sync_all(Handler *self)
 		char *checksum = compute_sha1(path);
 		char *params[3];
 		// adding 1 to template_root to take the starting '/' as well
-		sprintf(params[0], "%d", self->conf->site_id);
+		params[0] = self->conf->site_id;
 		params[1] = path + strlen(self->conf->template_root) + 1;
 		params[2] = checksum; 
 		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
@@ -159,7 +159,7 @@ void handler_sync_all(Handler *self)
 		char *path = queries->paths[i];
 		char *checksum = compute_sha1(path);	
 		char *params[2];
-		sprintf(params[0], "%d", self->conf->site_id);
+		params[0] = self->conf->site_id;
 		params[1] = path + strlen(self->conf->query_root) + 1;
 		params[2] = checksum; 
 		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
