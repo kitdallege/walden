@@ -10,6 +10,7 @@ create table asset
     id              serial      not null primary key,
     date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
     date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_deleted    timestamp   with time zone not null default 'infinity',
     name            text        not null ,
     asset_type      asset_type  not null default 'FILE',
     parent_path     ltree       not null,
@@ -22,6 +23,7 @@ create table template
     id              serial      not null primary key,
     date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
     date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_deleted    timestamp   with time zone not null default 'infinity',
     site_id         integer     not null references site(id),
     name            text        not null,
     parent_path     ltree       not null,
@@ -35,7 +37,7 @@ create table template_include
     id                  serial      not null primary key,
     date_created        timestamp   with time zone not null default (now() at time zone 'utc'),
     date_updated        timestamp   with time zone not null default (now() at time zone 'utc'),
-    site_id             integer     not null references site(id),
+    date_deleted        timestamp   with time zone not null default 'infinity',
     source_template_id  integer     references template(id),
     include_template_id integer     references template(id),
     unique (source_template_id, include_template_id)
@@ -46,6 +48,7 @@ create table query
     id              serial      not null primary key,
     date_created    timestamp   with time zone not null default (now() at time zone 'utc'),
     date_updated    timestamp   with time zone not null default (now() at time zone 'utc'),
+    date_deleted    timestamp   with time zone not null default 'infinity',
     site_id         integer     not null references site(id),
     name            text        not null,
     parent_path     ltree       not null,
@@ -138,7 +141,8 @@ $$
     begin
         return parent_path;
     end;
-$$ language plpgsql;
+$$ language plpgsql
+    returns null on null input;
 
 -- TODO: this could be code golf'd into being 'language sql immutable';
 create or replace function
@@ -151,7 +155,8 @@ $$
     begin
         return coalesce(name, '');
     end;
-$$ language plpgsql;
+$$ language plpgsql
+    returns null on null input;
 
 create or replace function
 walden_template_get_or_create(_site_id integer, _fullpath text, _checksum text)
@@ -288,6 +293,70 @@ $$
           name = walden_basename(_fullpath) and
           parent_path = walden_dirname(_fullpath)
     limit 1;
+$$ language sql;
+
+create or replace function
+walden_template_delete_by_fullpath(_site_id integer, _fullpath text)
+returns void as
+$$
+    update template set date_deleted = now()
+    where site_id = _site_id and
+          name = walden_basename(_fullpath) and
+          parent_path = walden_dirname(_fullpath);
+$$ language sql;
+
+create or replace function
+walden_query_delete_by_fullpath(_site_id integer, _fullpath text)
+returns void as
+$$
+    update query set date_deleted = now()
+    where site_id = _site_id and
+          name = walden_basename(_fullpath) and
+          parent_path = walden_dirname(_fullpath);
+$$ language sql;
+
+create or replace function
+walden_template_set_includes(_site_id integer, _fullpath text, _includes text[])
+returns void as
+$$
+    with
+        -- source_template
+        templ as (
+            select * from template
+            where site_id = _site_id and
+                name = walden_basename(_fullpath) and
+                parent_path = walden_dirname(_fullpath)
+        ),
+        -- template _includes
+        includes as (
+            select * from template
+            where (site_id, name, parent_path) in (
+                select _site_id,  walden_basename(inc::text), walden_dirname(inc::text)
+                from unnest(_includes) as inc
+            )
+        ),
+        -- current includes that are not in _includes
+        -- NOTE: might want to use  date_deleted on template_include
+        -- so we can know what changed after the fact? *eg: during re-render*
+        deletes as (
+            delete from template_include t
+            where not exists (
+                select 1 from includes
+                where source_template_id = (select id from templ) and include_template_id in (
+                    select t.id from includes as t
+                )
+        )
+    )
+    insert into template_include (source_template_id, include_template_id)
+    select (select id from templ), id
+    from includes
+    where not exists (
+        select 1
+        from template_include
+        where (source_template_id, include_template_id) not in (
+            select (select id from templ), t.id from includes as t
+        )
+    );
 $$ language sql;
 
 /*

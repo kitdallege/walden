@@ -44,6 +44,7 @@ static void handler_drain_queue(Handler *self, long current_nanos);
 static void handler_add_or_mod_file(Handler *self, const char *filepath);
 static void handler_del_file(Handler *self, const char *filepath);
 static char *compute_sha1(const char *filepath);
+static char *get_template_includes(const char *filepath);
 static char *string_from_file(const char *filepath);
 static long get_nanos(void);
 
@@ -122,21 +123,23 @@ void handler_enqueue_event(Handler *self, FileEvent *event)
 // TODO: api changed... get_or_create(site_id integer, fullpath text, checksum text) 
 // select get_or_create($1::integer, $2::text, $3::text);
 #define TEMPLATE_CREATE_OR_UPDATE_SQL "select walden_template_get_or_create($1::integer, $2::text, $3::text);"
+#define SET_TEMPLATE_INCLUDES_SQL "select walden_template_set_includes($1::integer, $2::text, $3:: text[]);"
 #define QUERY_CREATE_OR_UPDATE_SQL "select walden_query_get_or_create($1::integer, $2::text, $3::text);"
 void handler_sync_all(Handler *self)
 {
 	PGresult *res;
+	// templates: create_or_update all
 	Files *templates = find_files(self->conf->template_root);
 	for (int i = 0, len = templates->count; i < len; i++) {
 		// cut template_root off the path
 		char *path = templates->paths[i];
 		char *checksum = compute_sha1(path);
-		char *params[3];
+		char *params[2];
 		// adding 1 to template_root to take the starting '/' as well
 		params[0] = self->conf->site_id;
 		params[1] = path + strlen(self->conf->template_root) + 1;
 		params[2] = checksum; 
-		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
+		fprintf(stderr, "template_get_or_create: path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
 		res = PQexecParams(
 			self->conn,
 			TEMPLATE_CREATE_OR_UPDATE_SQL,
@@ -151,8 +154,34 @@ void handler_sync_all(Handler *self)
 		PQclear(res);
 		free(checksum);
 	}
+	// templates: set_template_includes all
+	for (int i = 0, len = templates->count; i < len; i++) {
+		// cut template_root off the path
+		char *path = templates->paths[i];
+		char *includes = get_template_includes(path);
+		if (!includes) { continue; }
+		char *params[2];
+		// adding 1 to template_root to take the starting '/' as well
+		params[0] = self->conf->site_id;
+		params[1] = path + strlen(self->conf->template_root) + 1;
+		params[2] = includes;
+		fprintf(stderr, "template_set_includes: path: %s site_id:%s path: %s includes: %s\n", path, params[0], params[1], params[2]);
+		res = PQexecParams(
+			self->conn,
+			SET_TEMPLATE_INCLUDES_SQL,
+			3, NULL, (const char* const*)params, NULL, NULL, 0
+		);
+		if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+			fprintf(
+				stderr, "template_set_includes failed! error: %s\n",
+				PQerrorMessage(self->conn)
+			);
+		}
+		PQclear(res);
+		free(includes);
+	}
 	free_files(templates);
-
+	// queries: create_or_update all.
 	Files *queries = find_files(self->conf->query_root);
 	for (int i = 0, len = queries->count; i < len; i++) {
 		// cut template_root off the path
@@ -162,7 +191,7 @@ void handler_sync_all(Handler *self)
 		params[0] = self->conf->site_id;
 		params[1] = path + strlen(self->conf->query_root) + 1;
 		params[2] = checksum; 
-		fprintf(stderr, "path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
+		fprintf(stderr, "query_create_or_update: path: %s site_id:%s rel: %s checksum: %s\n", path, params[0], params[1], params[2]);
 		res = PQexecParams(
 			self->conn,
 			QUERY_CREATE_OR_UPDATE_SQL,
@@ -222,22 +251,19 @@ static void handler_drain_queue(Handler *self, long current_nanos)
 static void handler_add_or_mod_file(Handler *self, const char *path)
 {
 	const char *stmt;
+	char *checksum = compute_sha1(path);
+	const char *params[1];
+	params[0] = self->conf->site_id;
 	if (strstr(path, self->conf->template_root)) {
 		stmt = TEMPLATE_CREATE_OR_UPDATE_SQL;
+		params[1] = path + strlen(self->conf->template_root) + 1;
 	} else {
 		stmt = QUERY_CREATE_OR_UPDATE_SQL;
+		params[1] = path + strlen(self->conf->query_root) + 1;
 	}
-	char *checksum = compute_sha1(path);
-	const char *params[2];
-	params[0] = path + strlen(self->conf->template_root) + 1;
 	params[1] = checksum;
-
 	PGresult *result;
-	result = PQexecParams(
-		self->conn,
-		TEMPLATE_CREATE_OR_UPDATE_SQL,
-		2, NULL, params, NULL, NULL, 0
-	);
+	result = PQexecParams(self->conn, stmt, 2, NULL, params, NULL, NULL, 0);
 	if (PQresultStatus(result) != PGRES_TUPLES_OK) {
 		fprintf(
 			stderr, "query failed: error:%s stmt:%s\n",
@@ -252,8 +278,8 @@ static void handler_add_or_mod_file(Handler *self, const char *path)
 // leave the record intact and use it in quries to determine what relations
 // have been (are currentl) broken by change.	
 //---------------------------------------------------------------------------
-#define TEMPLATE_DELETE_SQL "select template_delete_by_fullpath($1);"
-#define QUERY_DELETE_SQL "select query_delete_by_fullpath($1);"
+#define TEMPLATE_DELETE_SQL "select walden_template_delete_by_fullpath($1::integer, $2::text);"
+#define QUERY_DELETE_SQL "select walden_query_delete_by_fullpath($1::integer, $2::text);"
 static void handler_del_file(Handler *self, const char *path)
 {
 	const char *stmt;
@@ -263,7 +289,8 @@ static void handler_del_file(Handler *self, const char *path)
 		stmt = QUERY_DELETE_SQL;
 	}
 	const char *params[1];
-	params[0] = path + strlen(self->conf->template_root) + 1;
+	params[0] = self->conf->site_id;
+	params[1] = path + strlen(self->conf->template_root) + 1;
 	PGresult *result;
 	result = PQexecParams(
 		self->conn,
@@ -301,6 +328,51 @@ static char *compute_sha1(const char *filepath)
 	free(data);
 	// caller is responsible for free'ing hexresult
 	return strdup(hexresult);
+}
+static char *get_template_includes(const char *filepath) {
+	char *results = NULL;
+	int num_of_inc = 0;
+	int size_of_includes = 0;
+	char **includes = malloc(sizeof (char *) * 128);
+	char *template_data = string_from_file(filepath);
+	char *token = strstr(template_data, "{{>");
+	while (token) {
+		token += 3;
+		size_of_includes += strlen(token);
+		char *path = strdup(token);
+		char *end = strpbrk(path, " }");
+		*end = '\0';
+		fprintf(stderr, "path: %s\n", path);
+		includes[num_of_inc++] = path;
+		token = strstr(token, "{{>");
+	}
+	if (!num_of_inc) {
+		goto cleanup;
+	}
+	// size_of_all_strings + (2 '' chars be string) + ({} and \0)
+	size_t results_size = sizeof (char *) * size_of_includes + (num_of_inc * 3) + 3;
+	// TODO: it takes calloc to make this work. thus there is probably
+	// an off by 1 error below otherwise the  (final p = '\0') would be fine.
+	results = calloc(1, results_size);
+	char *p = results;
+	*p++  = '{';
+	for (int i=0; i < num_of_inc; i++) {
+		*p++ = '\"';
+		char *path = includes[i];
+		size_t len = strlen(path);
+		strncpy(p, path, len);
+		p = p + len;
+		*p++ = '\"';
+		*p++ = ',';
+	}
+	*(--p) = '}';
+	p = '\0';
+	fprintf(stderr, "strlen(results): %lu, results_size: %lu sizeof (char *): %lu\nresults: %s\n", strlen(results), results_size, sizeof (char *), results);
+cleanup:
+	free(template_data);
+	for (int i=0; i < num_of_inc; i++) { free(includes[i]);}
+	free(includes);
+	return results;
 }
 
 static char *string_from_file(const char *filepath)
