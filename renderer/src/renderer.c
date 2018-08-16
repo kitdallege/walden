@@ -11,6 +11,7 @@
 
 #include "renderer.h"
 #include "log.h"
+#include "config.h"
 #include "templates.h"
 #include "files.h"
 #include "flag_flipper.h"
@@ -24,14 +25,17 @@
 // * program should accept a single parameter arg to a 
 //   'config file' which contains a single db connection string value.
 //    from there its all json/db based.
+#define CONFIG_FILE "./renderer.conf"
 #define CONN_INFO "port=5432 dbname=walden user=postgres"
 #define LISTEN_CMD_1 "listen webpage_dirty"
 #define LISTEN_CMD_2 "listen webpages_dirty"
 #define CHUNK_SIZE 2000
+/*
 static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
 static char query_dir[] = "queries";
+*/
 //---------------------------------------------------------
 
 static bool is_scalar(int page_spec_id)
@@ -90,6 +94,7 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 			path += 4;
 		}
 		//fprintf(stderr, "filename: %s , path: %s\n", filename, path);
+		// TODO:  pass in config->web_dir 
 		if (write_page(filename, path, html)) {
 			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
 		}
@@ -234,11 +239,12 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	return 0;
 }
 
-int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
+int handle_pages(RendererState *self, PGresult *results,
 		int spec_id, json_object *global_context)
 {
 	// load up template_file
-	char *template_path = mk_abs_path(root_dir, template_dir, PQgetvalue(results, 0, 3), NULL);
+	Config *conf = configurator_get_config(self->configurator);
+	char *template_path = mk_abs_path(conf->template_dir, PQgetvalue(results, 0, 3), NULL);
 	char *template_data = read_file(template_path);
 	if (!template_data) {
 		fprintf(stderr, "Unable to read template: %s\n", template_path);
@@ -247,7 +253,7 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
 	}
 	free(template_path);
 	// load up query_file
-	char *query_path = mk_abs_path(root_dir, query_dir, PQgetvalue(results, 0, 4), NULL);
+	char *query_path = mk_abs_path(conf->query_dir, PQgetvalue(results, 0, 4), NULL);
 	char *query_file = read_file(query_path);
 	if (!query_file) {
 		fprintf(stderr, "Unable to load query: %s\n", query_path);
@@ -261,12 +267,12 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
 	// into using the 'vectorized' backend. (less code paths to manage).
 	if (is_scalar(spec_id)) {
 		handle_pages_scalar(
-			conn, flipper, results, results_len, spec_id,
+			self, /*conn, flipper,*/ results, results_len, spec_id,
 			template_data, query_file, global_context
 		);
 	} else {
 		handle_pages_vector(
-			conn, flipper, results, results_len, spec_id,
+			self, /*conn, flipper,*/ results, results_len, spec_id,
 			template_data, &query_file, global_context
 		);
 	}
@@ -276,12 +282,15 @@ int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *results,
 	return 0;
 }
 
-int write_page(const char *name, const char *path, const char *data)
+int write_page(RendererState *self, const char *name,
+		const char *path, const char *data)
 {
 	//fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
-	char *filename = mk_abs_path(root_dir, web_dir, (char *)path,
+	Config *conf = configurator_get_config(self->configurator);
+	char *filename = mk_abs_path(conf->web_dir, (char *)path,
 					(char *)name, NULL);
+
 	char *dir = strdup(filename);
 	char *dir_name = dirname(dir);
 	if (!file_exists(dir_name)) {
@@ -299,13 +308,16 @@ int write_page(const char *name, const char *path, const char *data)
 	return ret;
 }
 
-int write_pjax(const char *name, const char *path, const char *data)
+int write_pjax(RendererState *self, const char *name,
+		const char *path, const char *data)
 {
 	//fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
 	char pjax_dir[] = "_";
-	char *filename = mk_abs_path(root_dir, web_dir, pjax_dir,
+	Config *conf = configurator_get_config(self->configurator);
+	char *filename = mk_abs_path(conf->web_dir, pjax_dir,
 					(char *)path, (char *)name, NULL);
+
 	char *dir = strdup(filename);
 	char *dir_name = dirname(dir);
 	if (!file_exists(dir_name)) {
@@ -356,7 +368,7 @@ static int init_postgres(RendererState *state, const char *conninfo)
 				PQerrorMessage(state->conn));
 		return -1;
 	}
-	fprintf(stderr, "Connection to db succeeded: %s", conninfo);
+	fprintf(stderr, "Connection to db succeeded: %s\n", conninfo);
 	// set search_path	
 	res = PQexec(state->conn, "set search_path = walden"); 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -472,8 +484,10 @@ static RendererState *renderer_create(void)
 {
 	fprintf(stderr, "renderer_create\n");
 	RendererState *state = malloc(sizeof(*state));
+	state->configurator = configurator_aloc();
+	configurator_conf(state->configurator, CONFIG_FILE);
 	//
-	// make background worker for updating diry flags.
+	// make background worker for updating dirty flags.
 	state->flipper = flag_flipper_new();
 	controller_activate(state->flipper->ctl);	
 	if (pthread_create(&state->tid, NULL, webpage_clear_dirty_thread,

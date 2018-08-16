@@ -4,7 +4,7 @@ APP 	= renderer
 
 SRCDIR 	= src
 OBJDIR  = build
-
+DEPSDIR = ../deps
 CC	= gcc
 
 PREFIX?=/usr/local
@@ -17,6 +17,8 @@ CFLAGS  += -I. -I./include -I`pg_config --includedir`
 CFLAGS  += `pkg-config json-c --cflags`
 #TODO: move mustache to ./deps/ 
 CFLAGS  += -I./deps/mustach -I./deps/bqueue  -I./build/
+CFLAGS  += -I$(DEPSDIR)
+
 #TODO: it'd be nice to drop the gnu and use std c11 (fchown vs. chown .. etc).
 CFLAGS  += -Wsign-compare -std=gnu11 -pedantic
 
@@ -25,6 +27,7 @@ LDFLAGS += -lrt -lz -pthread
 SRCS	= $(wildcard $(SRCDIR)/*.c) 
 #SRCS    += ./deps/mustach/mustach-json-c.c ./deps/mustach/mustach.c
 SRCS    += $(wildcard ./deps/*/*.c)
+SRCS    += $(wildcard ../deps/*/*.c)
 
 S_OBJS=	$(SRCS:src/%.c=$(OBJDIR)/%.o)
 
@@ -35,6 +38,9 @@ $(APP): $(OBJDIR) queries.o $(S_OBJS)
 
 $(OBJDIR)/%.o: src/%.c 
 	$(CC) $(CFLAGS) -c $< -o $@ 
+
+#$(OBJDIR)/ini.o: $(DEPSDIR)/inih/ini.c
+#	$(CC) $(CFLAGS) -c $< -o $@ 
 
 queries.o: $(OBJDIR)
 	@echo "Generating $@"

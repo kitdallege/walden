@@ -4,13 +4,13 @@
 #include <libpq-fe.h>
 #include <json-c/json.h> 
 #include "flag_flipper.h"
+#include "config.h"
 
 /*
 static char root_dir[] = "/var/html/c2v";
 static char template_dir[] = "templates";
 static char web_dir[] = "www";
 static char query_dir[] = "queries";
-*/
 typedef struct SiteConf
 {
 	char *root_dir;
@@ -18,10 +18,11 @@ typedef struct SiteConf
 	char *web_dir;
 	char *query_dir;
 } SiteConf;
+*/
 
 typedef struct RendererState
 {
-	SiteConf conf;
+	Configurator *configurator;
 	PGconn *conn;
 	bool run;
 	FlagFlipperState *flipper;
@@ -71,11 +72,13 @@ extern const RendererApi renderer_api;
 
 
 // these will become static 'private' functions called from renderer_update();
-int handle_pages(PGconn *conn, FlagFlipperState *flipper, PGresult *res,
-		int spec_id, json_object *global_context);
-int handle_page(PGconn *conn, FlagFlipperState *flipper, const char *payload);
-int write_page(const char *name, const char *path, const char *data);
-int write_pjax(const char *name, const char *path, const char *data);
+int handle_pages(RendererState *self, PGresult *res, int spec_id,
+		json_object *global_context);
+//int handle_page(RendererState *renderer, const char *payload);
+int write_page(RendererState *renderer, const char *name,
+		const char *path, const char *data);
+int write_pjax(RendererState *renderer, const char *name,
+		const char *path, const char *data);
 
 // vectorized version of above.
 //int page_handler_thread(PGconn *conn, FlagFlipperState *flipper, PGresult **results);

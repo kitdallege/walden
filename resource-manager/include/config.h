@@ -14,13 +14,13 @@ typedef struct Config
 typedef struct Configurator Configurator;
 
 // live cycle
-Configurator   *configurator_aloc(void);
+Configurator	*configurator_aloc(void);
 void			configurator_conf(Configurator *self, void *user);
 void			configurator_zero(Configurator *self);
 void			configurator_free(Configurator *self);
 
 // API
-int		configurator_load_config(Configurator *self);
-Config *configurator_get_config(Configurator *self);
+int				configurator_load_config(Configurator *self);
+Config			*configurator_get_config(Configurator *self);
 
 #endif
