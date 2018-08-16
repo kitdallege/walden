@@ -225,8 +225,13 @@ static int put(void *closure, const char *name, int escape, FILE *file)
 	if (o) {
 		print(file, json_object_get_string(o), escape);
 	} else {
+		// perform partials includes as well as widget includes.
 		if (!strchr(name, '.')) { return 0; }
-		o = find(e, "CWD");
+		if (strstr(name, ".m")) {
+			o = find(e, "__template_root__");
+		} else if (strstr(name, ".htm")) {
+			o = find(e, "__web_root__");
+		}
 		if (!o) { return 0; }
 		dir = json_object_get_string(o);
 		txt = readfile(dir, name);

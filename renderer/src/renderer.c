@@ -54,12 +54,13 @@ static bool is_scalar(int page_spec_id)
 	return ret;
 }
 
-static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
+static int handle_pages_scalar(RendererState *self,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char *query_file, json_object *global_context)
 {
 	fprintf(stderr, "START handle_pages_scalar \n");
 	// query per page.
+	Config *conf = configurator_get_config(self->configurator);
 	PGresult *res;
 	PageIdArray *page_ids = page_id_array_create(results_len);
 
@@ -69,9 +70,9 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		char *cmd = strdup(query_file); // TODO: reuse a buffer instead of dup'n
 		char *params = PQgetvalue(results, i, 5);
 		rewrite_query(&cmd, params);
-		res = PQexec(conn, cmd);
+		res = PQexec(self->conn, cmd);
 		if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-			fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(conn));
+			fprintf(stderr, "get_query_result failed: cmd: %s  %s\n", cmd, PQerrorMessage(self->conn));
 			PQclear(res);
 			free(cmd);
 			fprintf(stderr, "END handle_pages_scalar \n");
@@ -82,6 +83,8 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		char *context_data = PQgetvalue(res, 0, 0);
 		json_object *obj = json_tokener_parse(context_data);
 		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
+		json_object_object_add(obj, "__template_root__", json_object_new_string(conf->template_root));
+		json_object_object_add(obj, "__web_root__", json_object_new_string(conf->web_root));
 		json_object_object_merge(obj, global_context);
 		// render
 		char *html = render_template_str(template_data, obj);
@@ -95,20 +98,20 @@ static int handle_pages_scalar(PGconn *conn, FlagFlipperState *flipper,
 		}
 		//fprintf(stderr, "filename: %s , path: %s\n", filename, path);
 		// TODO:  pass in config->web_dir 
-		if (write_page(filename, path, html)) {
-			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
+		if (write_page(conf->web_root, filename, path, html)) {
+			fprintf(stderr, "unable to write html file. web_root:%s filename:%s path:%s\n", conf->web_root, filename, path);
 		}
-		if (write_pjax(filename, path, html)) {
-			fprintf(stderr, "unable to write pjax file. filename:%s path:%s\n", filename, path);
+		if (write_pjax(conf->web_root, filename, path, html)) {
+			fprintf(stderr, "unable to write pjax file. web_root:%s filename:%s path:%s\n", conf->web_root, filename, path);
 		}
 		free(html);
 		json_object_put(obj);
 		PQclear(res);
 	}
-	pthread_mutex_lock(&(flipper->ctl->mutex));
+	pthread_mutex_lock(&(self->flipper->ctl->mutex));
 	// TODO: use a struct so we can store len along side the ids
-	bqueue_push(flipper->wq, page_ids);
-	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	bqueue_push(self->flipper->wq, page_ids);
+	pthread_mutex_unlock(&(self->flipper->ctl->mutex));
 	fprintf(stderr, "END handle_pages_scalar \n");
 	return 0;
 }
@@ -149,9 +152,7 @@ static int augment_query(char **query_file, char **query_params, int params_len)
 	return 0;
 }
 
-
-
-static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
+static int handle_pages_vector(RendererState *self,
 		PGresult *results, int results_len, int spec_id, char *template_data,
 		char **query_file, json_object *global_context)
 {
@@ -162,6 +163,7 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	}
 	fprintf(stderr, "results.len: %d\n", results_len);
 	// 1 query for all pages.
+	Config *conf = configurator_get_config(self->configurator);
 	PGresult *res;
 	char *query_param;
 	char *query_params[results_len];
@@ -181,17 +183,17 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 	//fprintf(stderr, "query_file pre agument: %s\n", *query_file);
 	augment_query(query_file, query_params, results_len);
 	//fprintf(stderr, "query_file post agument: %s\n", *query_file);
-	res = PQexec(conn, *query_file);
+	res = PQexec(self->conn, *query_file);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		fprintf(stderr, "error with query: %s error:%s\n",
-				*query_file, PQerrorMessage(conn));
+				*query_file, PQerrorMessage(self->conn));
 		fprintf(stderr, "END handle_pages_vector \n");
 		return 0;
 	}
 	if (!PQntuples(res)) {
 		fprintf(stderr, "vectorized query returned 0 rows. \n");
 		fprintf(stderr, "error with query: %s error:%s\n",
-				*query_file, PQerrorMessage(conn));
+				*query_file, PQerrorMessage(self->conn));
 		fprintf(stderr, "END handle_pages_vector \n");
 		return 0;
 	}
@@ -202,6 +204,8 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		char *json_data = PQgetvalue(res, i, 1);
 		json_object *obj = json_tokener_parse(json_data);
 		json_object_object_add(obj, "CWD", json_object_new_string("/var/html/c2v/templates"));
+		json_object_object_add(obj, "__template_root__", json_object_new_string(conf->template_root));
+		json_object_object_add(obj, "__web_root__", json_object_new_string(conf->web_root));
 		json_object_object_merge(obj, global_context);
 		// render
 		char *html = render_template_str(template_data, obj);
@@ -220,21 +224,21 @@ static int handle_pages_vector(PGconn *conn, FlagFlipperState *flipper,
 		} else {
 			path += 4;
 		}
-		if (write_page(filename, path, html)) {
-			fprintf(stderr, "unable to write html file. filename:%s path:%s\n", filename, path);
+		if (write_page(conf->web_root, filename, path, html)) {
+			fprintf(stderr, "unable to write html file. web_root:%s filename:%s path:%s\n", conf->web_root, filename, path);
 		}
-		if (write_pjax(filename, path, html)) {
-			fprintf(stderr, "unable to write pjax file. filename:%s path:%s\n", filename, path);
+		if (write_pjax(conf->web_root, filename, path, html)) {
+			fprintf(stderr, "unable to write pjax file. web_root:%s filename:%s path:%s\n", conf->web_root, filename, path);
 		}
 		free(html);
 		json_object_put(obj);
 	}
 	hash_table_destroy(ptable, NULL);
 	PQclear(res);
-	pthread_mutex_lock(&(flipper->ctl->mutex));
-	bqueue_push(flipper->wq, page_ids);
-	pthread_cond_broadcast(&(flipper->ctl->cond));
-	pthread_mutex_unlock(&(flipper->ctl->mutex));
+	pthread_mutex_lock(&(self->flipper->ctl->mutex));
+	bqueue_push(self->flipper->wq, page_ids);
+	pthread_cond_broadcast(&(self->flipper->ctl->cond));
+	pthread_mutex_unlock(&(self->flipper->ctl->mutex));
 	fprintf(stderr, "END handle_pages_vector \n");
 	return 0;
 }
@@ -244,7 +248,7 @@ int handle_pages(RendererState *self, PGresult *results,
 {
 	// load up template_file
 	Config *conf = configurator_get_config(self->configurator);
-	char *template_path = mk_abs_path(conf->template_dir, PQgetvalue(results, 0, 3), NULL);
+	char *template_path = mk_abs_path(conf->template_root, PQgetvalue(results, 0, 3), NULL);
 	char *template_data = read_file(template_path);
 	if (!template_data) {
 		fprintf(stderr, "Unable to read template: %s\n", template_path);
@@ -253,7 +257,7 @@ int handle_pages(RendererState *self, PGresult *results,
 	}
 	free(template_path);
 	// load up query_file
-	char *query_path = mk_abs_path(conf->query_dir, PQgetvalue(results, 0, 4), NULL);
+	char *query_path = mk_abs_path(conf->query_root, PQgetvalue(results, 0, 4), NULL);
 	char *query_file = read_file(query_path);
 	if (!query_file) {
 		fprintf(stderr, "Unable to load query: %s\n", query_path);
@@ -267,12 +271,12 @@ int handle_pages(RendererState *self, PGresult *results,
 	// into using the 'vectorized' backend. (less code paths to manage).
 	if (is_scalar(spec_id)) {
 		handle_pages_scalar(
-			self, /*conn, flipper,*/ results, results_len, spec_id,
+			self, results, results_len, spec_id,
 			template_data, query_file, global_context
 		);
 	} else {
 		handle_pages_vector(
-			self, /*conn, flipper,*/ results, results_len, spec_id,
+			self, results, results_len, spec_id,
 			template_data, &query_file, global_context
 		);
 	}
@@ -282,15 +286,12 @@ int handle_pages(RendererState *self, PGresult *results,
 	return 0;
 }
 
-int write_page(RendererState *self, const char *name,
+int write_page(const char *web_dir, const char *name,
 		const char *path, const char *data)
 {
 	//fprintf(stderr, "write_page: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
-	Config *conf = configurator_get_config(self->configurator);
-	char *filename = mk_abs_path(conf->web_dir, (char *)path,
-					(char *)name, NULL);
-
+	char *filename = mk_abs_path((char *)web_dir, (char *)path, (char *)name, NULL);
 	char *dir = strdup(filename);
 	char *dir_name = dirname(dir);
 	if (!file_exists(dir_name)) {
@@ -308,16 +309,13 @@ int write_page(RendererState *self, const char *name,
 	return ret;
 }
 
-int write_pjax(RendererState *self, const char *name,
+int write_pjax(const char *web_dir, const char *name,
 		const char *path, const char *data)
 {
 	//fprintf(stderr, "write_pjax: name:\"%s\" path:\"%s\"\n", name, path);
 	int ret = 0;
 	char pjax_dir[] = "_";
-	Config *conf = configurator_get_config(self->configurator);
-	char *filename = mk_abs_path(conf->web_dir, pjax_dir,
-					(char *)path, (char *)name, NULL);
-
+	char *filename = mk_abs_path((char *)web_dir, pjax_dir, (char *)path, (char *)name, NULL);
 	char *dir = strdup(filename);
 	char *dir_name = dirname(dir);
 	if (!file_exists(dir_name)) {
@@ -331,6 +329,7 @@ int write_pjax(RendererState *self, const char *name,
 	if (!start) {
 		free(filename);
 		free(dir);
+		fprintf(stderr, "write_pjax: error parsing <main>\n");
 		return -1;
 	}
 	char *end = strstr(start, "</main>");
@@ -467,7 +466,7 @@ static void multi_page(RendererState *state, PGnotify *notify)
 			//fprintf(stderr, "has_more: %d, params[1]: %s\n", has_more, params[1]);
 			// TODO: this becomes a queue write when we go multi-threaded.
 			fprintf(stderr, "multi_page [start handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
-			handle_pages(state->conn, state->flipper, res2, atoi(spec_ids[i]), global_context);
+			handle_pages(state, res2, atoi(spec_ids[i]), global_context);
 			fprintf(stderr, "multi_page [end handle_pages] spec_id: %s pk:%s res_cnt: %d time: %s\n", spec_ids[i], params[1], res_cnt, get_formatted_time()); 
 			// TODO: figure out column/row
 			//fprintf(stderr, "step of %d items %s\n", CHUNK_SIZE, get_formatted_time()); 

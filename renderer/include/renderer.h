@@ -75,10 +75,8 @@ extern const RendererApi renderer_api;
 int handle_pages(RendererState *self, PGresult *res, int spec_id,
 		json_object *global_context);
 //int handle_page(RendererState *renderer, const char *payload);
-int write_page(RendererState *renderer, const char *name,
-		const char *path, const char *data);
-int write_pjax(RendererState *renderer, const char *name,
-		const char *path, const char *data);
+int write_page(const char *web_root, const char *name, const char *path, const char *data);
+int write_pjax(const char *web_root, const char *name, const char *path, const char *data);
 
 // vectorized version of above.
 //int page_handler_thread(PGconn *conn, FlagFlipperState *flipper, PGresult **results);
