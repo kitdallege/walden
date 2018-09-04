@@ -1,0 +1,6 @@
+*.o
+.flavor
+.objs
+admin.so
+assets.h
+cert
