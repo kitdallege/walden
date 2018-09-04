@@ -7,6 +7,7 @@
 create table taxonomy
 (
     id      serial  not null primary key,
+    -- TODO: resource_tree(id)
     site_id integer not null references site(id) unique,
     name    text    not null unique,
     unique (site_id, name)
@@ -21,7 +22,7 @@ create table taxon_type
     id          serial  not null primary key,
     name        text    not null unique,
     handler     text    not null,
-    arg_spec    json not null default '{}'
+    arg_spec    json    not null default '{}'
 );
 create table taxon
 (
@@ -33,16 +34,33 @@ create table taxon
     unique (taxonomy_id, parent_path, name)
 );
 select pg_catalog.pg_extension_config_dump('taxon', '');
+
+-- this should probably be to the view. and if we want to store the
+-- routes we create, do that as an after thought.
+create table taxon_view
+(
+    id          serial      not null primary key,
+    taxon_id    integer     not null references taxon(id),
+    view_id     integer     not null references resource_view(id),
+    key         text        not null,
+    unique (taxon_id, view_id, key)
+);
+-- taxon_route
+-- each taxon holds at least 2 route(s) (list & detail)
+-- the route containes a ref to its view and backrefs of its handlers. 
+
+
+/*
 -- Needed so that when a template/query changes it can be linked to the
 -- resources which need to be flagged as dirty.
-create table taxon_page_spec
+create table taxon_render_spec
 (
     id                  serial      not null primary key,
     taxon_id            integer     not null references taxon(id),
-    page_spec_id        integer     not null references page_spec(id),
+    render_spec_id      integer     not null references render_spec(id),
     key                 text        not null,
     --factory_func text not null
-    unique (taxon_id, page_spec_id, key)
+    unique (taxon_id, render_spec_id, key)
     --role                taxon_type  not null default 'index';
 );
 -- ties a taxon to the entity 'type'(s)  it displays
@@ -59,6 +77,7 @@ create table taxon_entity_type
     --selectable      text    not null
     --key_fields    text[]  not null default '{}'::text[];
 );
+*/
 
 /* The renderer generates a single where clause /  group by on a
 'pre defined' 'key'. It expects to find a 'context' column containing
@@ -170,13 +189,13 @@ $$
 $$ language sql;
 
 create or replace function
-walden_taxon_add_page_spec(_taxon_id integer, _page_spec_id integer, _key text)
+walden_taxon_add_view(_taxon_id integer, _view_id integer, _key text)
 returns integer as
 $$
     with ins as (
-            insert into taxon_page_spec(taxon_id, page_spec_id, key)
-            values (_taxon_id, _page_spec_id, _key)
-            on conflict (taxon_id, page_spec_id, key)
+            insert into taxon_view(taxon_id, view_id, key)
+            values (_taxon_id, _view_id, _key)
+            on conflict (taxon_id, view_id, key)
             -- never executed, but locks the row
             -- if no lock needed then 'do nothing' is less overhead. 
             do update set taxon_id = null where false
@@ -184,9 +203,9 @@ $$
         )
         select id from ins
             union all
-        select id from taxon_page_spec
+        select id from taxon_view
         where   taxon_id = _taxon_id and
-                page_spec_id = _page_spec_id and
+                view_id = _view_id and
                 key = _key
         limit 1;
 $$ language sql volatile;
@@ -218,6 +237,7 @@ $$
         _entity_table text;
     begin
         _taxon_id := _taxon.id;
+        /*
         -- add taxon_entity_type record for this.
         insert into taxon_entity_type (taxon_id, entity_id, handler_args, where_clause)
         values (_taxon_id, _entity_type_id, _handler_args, _where_clause)
@@ -227,6 +247,7 @@ $$
         -- call taxon_type.handler(*args)
         -- this function will create trigger/function uniquely based on the
         -- 'taxon-type'
+        */
         select into handler_fn handler
         from taxon_type where taxon_type.id = (
             select taxon_type_id from taxon where id = _taxon_id);
@@ -305,9 +326,9 @@ $$
             function %s__handler(t taxon, obj %s)
             returns void as
             $fn$
-                insert into page (
-                    site_id, name, mount, page_spec_id,
-                    query_args, date_updated, dirty
+                insert into resource (
+                    tree_id, name, mount, view_id,
+                    view_args, date_updated, dirty
                 )
                 values (
                     %L,
@@ -317,14 +338,13 @@ $$
                     default,
                     (now() at time zone ''utc''),
                     true
-                ) on conflict (name, mount)
+                ) on conflict (tree_id, mount, name)
                     do update
                         set date_updated = (now() at time zone ''utc''),
                         dirty = true;
             $fn$ language sql;', _name_part, _entity_table,
             (select site_id from taxonomy where id = _taxon.taxonomy_id),
-            (select page_spec_id from taxon_page_spec
-                where taxon_id = _taxon.id and key = 'main')
+            (select view_id from taxon_view where taxon_id = _taxon.id and key = 'main')
         ); 
     end;
 $$ language plpgsql;
@@ -350,9 +370,9 @@ $$
             function %s__handler(t taxon, obj %s)
             returns void as
             $fn$
-                insert into page (
-                    site_id, name, mount, page_spec_id,
-                    query_args, date_updated, dirty
+                insert into resource (
+                    tree_id, name, mount, view_id,
+                    view_args, date_updated, dirty
                 )
                 values (
                     %L,
@@ -363,7 +383,7 @@ $$
                     (now() at time zone ''utc''),
                     true
                 )
-                on conflict (name, mount)
+                on conflict (tree_id, mount, name)
                 do update
                     set date_updated = (now() at time zone ''utc''),
                     dirty = true;
@@ -371,8 +391,7 @@ $$
             (select site_id from taxonomy where id = _taxon.taxonomy_id),
             _name_field,
             _date_field,
-            (select page_spec_id from taxon_page_spec
-                where taxon_id = _taxon.id and key = 'main'),
+            (select view_id from taxon_view where taxon_id = _taxon.id and key = 'main'),
             _key_field
          );
     end;
@@ -414,9 +433,9 @@ $$
             function %s__index_handler(t taxon, obj %s)
             returns void as
             $fn$
-                insert into page (
-                    site_id, name, mount, page_spec_id,
-                    query_args, date_updated, dirty
+                insert into resource (
+                    tree_id, name, mount, view_id,
+                    view_args, date_updated, dirty
                 )
                 values (
                     %L,
@@ -426,14 +445,13 @@ $$
                     %s(obj),
                     (now() at time zone ''utc''),
                     true
-                ) on conflict (name, mount)
+                ) on conflict (tree_id, mount, name)
                     do update
                         set date_updated = (now() at time zone ''utc''),
                         dirty = true;
             $fn$ language sql;', _name_part, _entity_table,
             (select site_id from taxonomy where id = _taxon.taxonomy_id),
-            (select page_spec_id from taxon_page_spec
-                where taxon_id = _taxon.id and key = 'landing'),
+            (select view_id from taxon_view where taxon_id = _taxon.id and key = 'landing'),
             _index_key_fn
         );
         -- year
@@ -444,9 +462,9 @@ $$
             function %s__day_handler(t taxon, obj %s)
             returns void as
             $fn$
-                insert into page (
-                    site_id, name, mount, page_spec_id,
-                    query_args, date_updated, dirty
+                insert into resource (
+                    tree_id, name, mount, view_id,
+                    view_args, date_updated, dirty
                 )
                 values (
                     %L,
@@ -456,15 +474,14 @@ $$
                     %s(obj),
                     (now() at time zone ''utc''),
                     true
-                ) on conflict (name, mount)
+                ) on conflict (tree_id, mount, name)
                     do update
                         set date_updated = (now() at time zone ''utc''),
                         dirty = true;
             $fn$ language sql;', _name_part, _entity_table,
             (select site_id from taxonomy where id = _taxon.taxonomy_id),
             _date_field, _date_field,
-            (select page_spec_id from taxon_page_spec
-                where taxon_id = _taxon.id and key = 'day'),
+            (select view_id from taxon_view where taxon_id = _taxon.id and key = 'day'),
             _day_key_fn
         );
         -- today

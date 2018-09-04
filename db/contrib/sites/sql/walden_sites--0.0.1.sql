@@ -74,6 +74,7 @@ $$
         app_id := (walden_application_get_or_create('Sites')).id;
         perform walden_entity_get_or_create(app_id, 'Organization', 'organization');
         perform walden_entity_get_or_create(app_id, 'Site', 'site');
+        perform walden_entity_get_or_create(app_id, 'Site Setting', 'site_setting');
     end;
 $$ language plpgsql;
 
