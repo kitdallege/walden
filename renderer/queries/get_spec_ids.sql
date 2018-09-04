@@ -1,1 +1,1 @@
-select distinct page_spec_id from page where dirty = true;
+select distinct view_id from resource where dirty = true;
